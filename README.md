@@ -1,4 +1,4 @@
-# i225nvm — native NVM/EEPROM tool for Intel i225/i226 on ARM
+# i225nvm — native NVM/EEPROM tool for Intel i225/i226 from source
 
 A clean-room, ARM-compilable reimplementation of the shadow-RAM programming
 path performed by Intel's proprietary `nvmupdate64e`, intended to run natively
