@@ -1,0 +1,9 @@
+# build artifacts
+*.o
+i225nvm
+
+# device dumps / backups produced at runtime
+backup_*.bin
+
+# Intel's proprietary NVM update binary — not redistributable
+nvmupdate64e
