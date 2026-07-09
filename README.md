@@ -215,7 +215,9 @@ On the recovered board, the interface appeared as `eth1` with MAC
 
 ## Permanent MAC Address
 
-The permanent MAC address is stored in the first three 16-bit shadow-NVM words:
+The permanent MAC address is stored in the first six bytes of the full SPI
+flash image. These bytes are also exposed after boot as shadow-NVM words
+`0x00..0x02`:
 
 | NVM word | File bytes | Meaning |
 | --- | --- | --- |
@@ -223,9 +225,10 @@ The permanent MAC address is stored in the first three 16-bit shadow-NVM words:
 | `0x01` | `2..3` | MAC bytes 2 and 3 |
 | `0x02` | `4..5` | MAC bytes 4 and 5 |
 
-The dump file is little-endian, so the first six bytes of `shadow.bin` are the
-MAC address in normal display order. After changing those bytes, recompute
-checksum word `0x3f` so words `0x00..0x3f` sum to `0xbaba`.
+On the tested I226-V, writing only the shadow-NVM words with `write -n 64`
+verified before reboot but did not persist across reboot. For a permanent
+change, patch the 1 MB full-flash image, recompute checksum word `0x3f`, and
+program the full image with `flashwrite`.
 
 Use a unique unicast MAC address. A `02:...` prefix is suitable for a locally
 administered address; do not reuse Intel's public OUI unless you have an
@@ -236,26 +239,29 @@ Example, setting `02:a0:c9:12:34:56`:
 ```sh
 BDF=0001:01:00.0
 MAC=02:a0:c9:12:34:56
+SRC=firmware/FXVL_125C_V_1MB_2.32.bin
+DST=firmware/FXVL_125C_V_1MB_2.32_mac-02-a0-c9-12-34-56.bin
 
-sudo ./i225nvm dump -b "$BDF" -o shadow-before.bin
-cp shadow-before.bin shadow-mac.bin
+cp "$SRC" "$DST"
 
-python3 - "$MAC" <<'PY'
+python3 - "$DST" "$MAC" <<'PY'
+import hashlib
 import sys
 from pathlib import Path
 
-mac = bytes(int(x, 16) for x in sys.argv[1].split(":"))
+p = Path(sys.argv[1])
+mac = bytes(int(x, 16) for x in sys.argv[2].split(":"))
 if len(mac) != 6:
     raise SystemExit("MAC must have 6 octets")
 if mac[0] & 1:
     raise SystemExit("MAC must be unicast; first octet must not be odd")
 
-p = Path("shadow-mac.bin")
 data = bytearray(p.read_bytes())
-if len(data) < 0x80:
-    raise SystemExit("shadow dump too small")
+if len(data) != 1048576:
+    raise SystemExit("expected the 1 MB I226-V image")
 
-data[0:6] = mac
+old = bytes(data[:6])
+data[:6] = mac
 
 # Intel NVM checksum: words 0x00..0x3f must sum to 0xbaba.
 words = [data[i] | (data[i + 1] << 8) for i in range(0, 0x80, 2)]
@@ -264,31 +270,48 @@ data[0x7e] = checksum & 0xff
 data[0x7f] = checksum >> 8
 
 p.write_bytes(data)
-print(f"checksum word 0x3f = 0x{checksum:04x}")
+print("old_mac=" + ":".join(f"{b:02x}" for b in old))
+print("new_mac=" + ":".join(f"{b:02x}" for b in mac))
+print(f"checksum_word_0x3f=0x{checksum:04x}")
+print("sha256=" + hashlib.sha256(data).hexdigest())
 PY
 ```
 
-Dry-run first. Then write only the first 64 words, which include the MAC words
-and checksum word:
+For `02:a0:c9:12:34:56`, the patched image should report:
+
+```text
+checksum_word_0x3f=0x0095
+sha256=bf49d1bc57fa98ab81ad88e5aaf7224df1a59116fd3690f470d1c85912504ad2
+```
+
+Dry-run first, then unbind `igc` and perform the destructive full-image write:
 
 ```sh
-sudo ./i225nvm write -b "$BDF" -i shadow-mac.bin -n 64
+sudo ./i225nvm flashwrite -b "$BDF" -i "$DST"
 
 if [ -e /sys/bus/pci/devices/$BDF/driver/unbind ]; then
   printf '%s\n' "$BDF" | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
 fi
 
-sudo ./i225nvm write -b "$BDF" -i shadow-mac.bin -n 64 --write --fix-checksum
-sudo ./i225nvm verify -b "$BDF" -i shadow-mac.bin -n 64
-sudo ./i225nvm checksum -b "$BDF"
+sudo ./i225nvm flashwrite -b "$BDF" -i "$DST" --write --force-flash
+```
+
+Take an independent dump and compare before rebooting:
+
+```sh
+sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/post-mac-1mb.bin
+sha256sum "$DST" backups/post-mac-1mb.bin
+cmp "$DST" backups/post-mac-1mb.bin
 sudo reboot
 ```
 
-After reboot, confirm the address from Linux:
+After reboot, confirm the address from Linux and from shadow NVM:
 
 ```sh
 ip -br link
 cat /sys/class/net/eth1/address
+sudo ./i225nvm dump -b "$BDF" -n 64 -o shadow-after-mac.bin
+sudo ./i225nvm checksum -b "$BDF"
 ```
 
 ## Restore
@@ -370,8 +393,11 @@ FLSW status bits:
 | `DONE` | `0x40000000` |
 | `GLDONE` | `0x80000000` |
 
-`flashwrite` waits for idle, erases 4 KB sectors, writes in 256-byte pages, and
-verifies by reading the image back.
+`flashwrite` waits for idle, erases 4 KB sectors, writes with one-byte FLSW
+program transactions, skips already-erased `0xff` bytes, and verifies by reading
+the image back. On the tested I226-V/SST flash, larger FLSW write counts only
+programmed the low byte of `FLSWDATA`; byte transactions were required for a
+correct full-image verify.
 
 ## Files
 

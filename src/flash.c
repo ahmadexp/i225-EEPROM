@@ -108,7 +108,7 @@ static int flsw_wait_idle(const struct pci_dev *d)
 {
     for (int i = 0; i < FLSW_TIMEOUT; i++) {
         uint32_t v = igc_rd32(d, IGC_FLSWCTL);
-        if ((v & (FLSW_DONE | FLSW_GLDONE)) == (FLSW_DONE | FLSW_GLDONE))
+        if ((v & FLSW_DONE) && !(v & FLSW_FLBUSY))
             return 0;
         usleep(5);
     }
@@ -235,38 +235,26 @@ int flash_write(const struct pci_dev *d, uint32_t addr,
 {
     size_t off = 0;
     while (off < len) {
-        uint32_t page_len = FLASH_PAGE_SIZE -
-                            ((addr + (uint32_t)off) & (FLASH_PAGE_SIZE - 1));
-        if (page_len > len - off)
-            page_len = (uint32_t)(len - off);
+        if (buf[off] == 0xff) {
+            off++;
+            continue;
+        }
 
         int rc = flsw_wait_idle(d);
         if (rc)
             return rc;
-        igc_wr32(d, IGC_FLSWCNT, page_len);
-        rc = flsw_start_cmd(d, FLSW_CMD_WRITE, addr + (uint32_t)off, page_len);
+        igc_wr32(d, IGC_FLSWCNT, 1);
+        rc = flsw_start_cmd(d, FLSW_CMD_WRITE, addr + (uint32_t)off, 1);
         if (rc)
             return rc;
-
-        uint32_t page_off = 0;
-        while (page_off < page_len) {
-            uint32_t chunk = (page_len - page_off) >= 4 ? 4 : page_len - page_off;
-            uint32_t data = 0;
-            for (uint32_t b = 0; b < chunk; b++)
-                data |= (uint32_t)buf[off + page_off + b] << (8 * b);
-            igc_wr32(d, IGC_FLSWDATA, data);
-            rc = flsw_check_cmdv(d);
-            if (rc)
-                return rc;
-            rc = flsw_wait_done(d, 0, NULL);
-            if (rc)
-                return rc;
-            page_off += chunk;
-        }
+        igc_wr32(d, IGC_FLSWDATA, buf[off]);
+        rc = flsw_check_cmdv(d);
+        if (rc)
+            return rc;
         rc = flsw_wait_done(d, 1, NULL);
         if (rc)
             return rc;
-        off += page_len;
+        off++;
     }
     return 0;
 }

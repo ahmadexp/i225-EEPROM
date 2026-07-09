@@ -114,6 +114,22 @@ Live recovery result:
   matching the input image.
 - After reboot, the device enumerated as `8086:125c` (`Intel Ethernet
   Controller I226-V`) and the Linux `igc` driver bound successfully.
+- Permanent MAC update result:
+  - Writing shadow-NVM words `0x00..0x3f` with `write -n 64 --fix-checksum`
+    changed immediate readback but reverted after reboot.
+  - Patching bytes `0..5` and checksum word `0x3f` in the 1 MB full-flash image,
+    then programming with `flashwrite`, persisted across reboot.
+  - Test MAC `02:a0:c9:12:34:56` produced checksum word `0x0095` and image
+    SHA-256 `bf49d1bc57fa98ab81ad88e5aaf7224df1a59116fd3690f470d1c85912504ad2`.
+  - Post-reboot Linux reported `igc ... eth1: MAC: 02:a0:c9:12:34:56`, and a
+    64-word shadow dump started with `02 a0 c9 12 34 56`.
+- FLSW write quirk on the tested I226-V/SST flash:
+  - A single write command with larger byte counts only programmed the low byte
+    of `FLSWDATA`.
+  - Correct full-image programming required one-byte FLSW write transactions
+    after sector erase, skipping `0xff` bytes.
+  - `FLSWCTL.GLDONE` was not reliable after byte writes; idle detection must use
+    `DONE && !FLBUSY`.
 
 ## Evidence captured from Intel package and Pi
 
