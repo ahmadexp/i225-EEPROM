@@ -1,9 +1,9 @@
 # i225nvm
 
 Native Linux/ARM NVM/EEPROM recovery tool for Intel i225/i226 Foxville
-controllers, built from source.
+controllers (TimeHat), built from source.
 
-This repo was built to recover an Intel I226-V on a Raspberry Pi after the
+This repo was built to recover an Intel I226-V (like the one used on the TimeHat) on a Raspberry Pi after the
 controller enumerated as the blank-NVM PCI ID `8086:125f` and the Linux `igc`
 driver refused to bind with an invalid NVM checksum. The successful recovery
 programmed a 1 MB I226-V image and the controller now enumerates as
