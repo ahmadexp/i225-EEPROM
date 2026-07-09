@@ -1,13 +1,59 @@
-# i225nvm
+<p align="center">
+  <img src="assets/i225-nvm-flash-4-pi-logo.png" alt="i225 NVM Flash 4 Pi" width="920">
+</p>
 
-Native Linux/ARM NVM/EEPROM recovery tool for Intel i225/i226 Foxville
-controllers (TimeHat), built from source.
+<h1 align="center">i225 NVM Flash 4 Pi</h1>
 
-This repo was built to recover an Intel I226-V (like the one used on the TimeHat) on a Raspberry Pi after the
-controller enumerated as the blank-NVM PCI ID `8086:125f` and the Linux `igc`
-driver refused to bind with an invalid NVM checksum. The successful recovery
-programmed a 1 MB I226-V image and the controller now enumerates as
-`8086:125c` with `igc` bound.
+<p align="center">
+  Native Linux/ARM NVM and SPI-flash recovery tooling for Intel i225/i226
+  Foxville controllers on Raspberry Pi-class hosts.
+</p>
+
+<p align="center">
+  <strong>Recovered on real hardware:</strong>
+  blank I226 <code>8086:125f</code> to working I226-V <code>8086:125c</code>,
+  with permanent MAC programming verified after reboot.
+</p>
+
+## Overview
+
+This repo was built to recover an Intel I226-V, including the TimeHat-style
+I226-V board, on a Raspberry Pi after the controller enumerated as the
+blank-NVM PCI ID `8086:125f` and the Linux `igc` driver refused to bind with an
+invalid NVM checksum.
+
+The successful recovery programmed a 1 MB I226-V full-flash image. After
+reboot, the controller enumerated as `8086:125c`, the `igc` driver bound, and a
+permanent MAC update to `02:a0:c9:12:34:56` persisted across reboot.
+
+## Safety
+
+`flashwrite` is destructive. A wrong image, wrong device, interrupted write, or
+unsupported flash part can brick the NIC. Always take two matching backups,
+perform a dry-run, and independently dump/compare the programmed image before
+rebooting.
+
+This project is not affiliated with Intel, Raspberry Pi, or any board vendor.
+Firmware binaries are not vendored here.
+
+## Wiki
+
+Start with the source-controlled wiki pages:
+
+| Page | Purpose |
+| --- | --- |
+| [Wiki Home](docs/wiki/Home.md) | Documentation map and tested hardware summary |
+| [Recovery Guide](docs/wiki/Recovery-Guide.md) | End-to-end blank I226 recovery flow |
+| [Permanent MAC Address](docs/wiki/Permanent-MAC-Address.md) | Full-flash MAC programming procedure |
+| [Troubleshooting](docs/wiki/Troubleshooting.md) | Common failures, symptoms, and fixes |
+
+## License
+
+Copyright (c) 2026 Ahmad Byagowi. All rights reserved.
+
+This repository is source-available under the custom license in [LICENSE](LICENSE).
+The code, documentation, and logo may not be redistributed, relicensed, sold, or
+used commercially without written permission from the author.
 
 ## Tested Recovery
 
@@ -414,7 +460,7 @@ correct full-image verify.
 ## References
 
 - Firmware image source:
-  `https://github.com/hunghvu/Intel-I226-V-NVM-Firmware`
+  `https://github.com/ahmadexp/Intel-I226-V-NVM-Firmware`
 - Foxville/I225 software manual mirror used for register/flow confirmation:
   `https://dokumen.pub/intel-foxville-i225-25-gbps-ethernet-controller-software-user-manual-13nbsped.html`
 - Public i210 FLSW implementation used for cross-checking command flow:

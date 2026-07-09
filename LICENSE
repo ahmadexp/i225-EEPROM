@@ -1,0 +1,55 @@
+# Source-Available License
+
+Copyright (c) 2026 Ahmad Byagowi.
+
+All rights reserved.
+
+This repository, including its source code, documentation, images, logo,
+reverse-engineering notes, build scripts, and other materials, is made available
+for inspection and personal use by the copyright holder.
+
+## Permitted Uses
+
+You may:
+
+- View, clone, and build this repository for personal, non-commercial hardware
+  recovery, research, education, and evaluation.
+- Use the unmodified tool on hardware you own or are authorized to service.
+- Reference this repository by name or URL in technical discussion, provided the
+  copyright notice and author attribution remain intact.
+
+## Restrictions
+
+You may not, without prior written permission from Ahmad Byagowi:
+
+- Sell, rent, sublicense, relicense, or commercially exploit this repository or
+  derivative works.
+- Redistribute modified or unmodified copies as a product, service, package,
+  firmware bundle, appliance, hosted service, or paid support offering.
+- Remove or obscure copyright notices, author attribution, license text, safety
+  warnings, or provenance notes.
+- Use the project name, logo, or author's name to imply endorsement.
+- Incorporate this work into a proprietary or open-source project that grants
+  broader rights than this license.
+
+## Contributions
+
+Unless otherwise agreed in writing, any contribution submitted to this
+repository is offered under this same license, and the contributor represents
+that they have the right to submit it.
+
+## No Warranty
+
+This software and documentation are provided "as is", without warranty of any
+kind, express or implied, including but not limited to warranties of
+merchantability, fitness for a particular purpose, non-infringement, or
+hardware safety.
+
+Using this tool can permanently alter or damage network hardware. You are solely
+responsible for any hardware, firmware, data, network, legal, or operational
+consequences of using it.
+
+## Permission
+
+For commercial use, redistribution, relicensing, integration, or other rights
+not granted above, contact the author for written permission.
