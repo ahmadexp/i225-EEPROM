@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Recovery guide
+    url: https://github.com/ahmadexp/i225-NVM-FLASH/blob/main/docs/wiki/Recovery-Guide.md
+    about: Start here for the tested blank I226-V recovery flow.
+  - name: Troubleshooting
+    url: https://github.com/ahmadexp/i225-NVM-FLASH/blob/main/docs/wiki/Troubleshooting.md
+    about: Check known symptoms before opening a new report.
+

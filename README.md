@@ -5,6 +5,12 @@
 <h1 align="center">i225 NVM Flash 4 Pi</h1>
 
 <p align="center">
+  <a href="https://github.com/ahmadexp/i225-NVM-FLASH/actions/workflows/ci.yml">
+    <img src="https://github.com/ahmadexp/i225-NVM-FLASH/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+</p>
+
+<p align="center">
   Native Linux/ARM NVM and SPI-flash recovery tooling for Intel i225/i226
   Foxville controllers on Raspberry Pi-class hosts.
 </p>
@@ -43,9 +49,17 @@ Start with the source-controlled wiki pages:
 | Page | Purpose |
 | --- | --- |
 | [Wiki Home](docs/wiki/Home.md) | Documentation map and tested hardware summary |
+| [Safety Checklist](docs/wiki/Safety-Checklist.md) | Prewrite and postwrite safety checks |
 | [Recovery Guide](docs/wiki/Recovery-Guide.md) | End-to-end blank I226 recovery flow |
 | [Permanent MAC Address](docs/wiki/Permanent-MAC-Address.md) | Full-flash MAC programming procedure |
+| [Command Reference](docs/wiki/Command-Reference.md) | CLI commands, options, and risk levels |
+| [Hardware and Firmware](docs/wiki/Hardware-and-Firmware.md) | Tested hardware matrix and image metadata |
 | [Troubleshooting](docs/wiki/Troubleshooting.md) | Common failures, symptoms, and fixes |
+| [Publishing the Wiki](docs/wiki/Publishing-the-Wiki.md) | Maintainer workflow for syncing GitHub Wiki |
+
+The source-controlled wiki lives in `docs/wiki/`. Maintainers can publish it to
+GitHub Wiki with `scripts/publish-wiki.sh` or the manual `Publish Wiki` GitHub
+Actions workflow.
 
 ## License
 
@@ -118,6 +132,22 @@ make CROSS=aarch64-linux-gnu-
 
 The tool must run as root because it maps PCI BAR0 and accesses NVM control
 registers.
+
+## Repository Layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | C implementation for PCI discovery, NVM access, flash access, and image helpers |
+| `docs/wiki/` | Source-controlled GitHub Wiki pages |
+| `.github/` | CI workflow, issue templates, and pull request template |
+| `assets/` | Repository artwork |
+| `RE_NOTES.md` | Reverse-engineering notes and validation evidence |
+
+## Contributing and Support
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SUPPORT.md](SUPPORT.md), and
+[SECURITY.md](SECURITY.md). Do not commit firmware binaries, private dumps,
+or proprietary Intel updater files.
 
 ## Quick Identification
 

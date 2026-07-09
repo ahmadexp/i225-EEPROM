@@ -1,0 +1,33 @@
+name: Documentation fix
+description: Report unclear, missing, or outdated documentation.
+title: "[docs]: "
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Documentation area
+      options:
+        - README
+        - Recovery guide
+        - Permanent MAC address guide
+        - Troubleshooting
+        - Command reference
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What needs to change?
+      description: Describe the confusing or missing part.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested wording or evidence
+      description: Optional, but exact command output is helpful.
+    validations:
+      required: false
+

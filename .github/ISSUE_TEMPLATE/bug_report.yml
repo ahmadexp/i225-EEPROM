@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a build, CLI, or read-only command problem.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach firmware binaries, private NVM dumps, proprietary Intel updater binaries, or production MAC addresses.
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Distribution, kernel, architecture, and hardware host.
+      placeholder: "Raspberry Pi OS, Linux 6.x, arm64, Raspberry Pi 5"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Repository commit
+      description: Output of `git rev-parse --short HEAD`.
+      placeholder: "75c5c27"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: Paste the exact command and complete output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: list-output
+    attributes:
+      label: "`sudo ./i225nvm list`"
+      description: Include this when hardware is present.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Include only sanitized logs or read-only diagnostic output.
+    validations:
+      required: false

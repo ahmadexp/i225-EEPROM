@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build with ${{ matrix.cc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          set -eux
+          make clean
+          make CC=${{ matrix.cc }}
+
+      - name: Check CLI help
+        run: |
+          set -eux
+          ./i225nvm --help > /tmp/i225nvm-help.txt
+          test -s /tmp/i225nvm-help.txt
+

@@ -1,0 +1,69 @@
+name: Recovery or hardware report
+description: Report a blank-NVM recovery result or new board behavior.
+title: "[hardware]: "
+labels: ["hardware", "recovery"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `flashwrite` is destructive. Do not proceed without two matching backups. Do not attach firmware binaries or private full-flash dumps.
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      placeholder: "Raspberry Pi 5, arm64 Linux"
+    validations:
+      required: true
+  - type: input
+    id: pci-id
+    attributes:
+      label: PCI identity
+      description: Include BDF, vendor:device, revision, and subsystem IDs if available.
+      placeholder: "0001:01:00.0, 8086:125f, rev 04, sub=...."
+    validations:
+      required: true
+  - type: textarea
+    id: list-output
+    attributes:
+      label: "`sudo ./i225nvm list`"
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: flash-size
+    attributes:
+      label: Flash size used
+      placeholder: "1048576 bytes"
+    validations:
+      required: true
+  - type: textarea
+    id: image
+    attributes:
+      label: Firmware image metadata
+      description: File name, source commit, byte size, SHA-256, and ETrack ID if known.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks completed
+      options:
+        - label: I unbound `igc` before raw flash work.
+          required: false
+        - label: I took two prewrite flash dumps with the same explicit size.
+          required: true
+        - label: The two prewrite backups compared identical with `cmp`.
+          required: true
+        - label: I ran a `flashwrite` dry run before using `--write --force-flash`.
+          required: true
+        - label: I dumped and compared the programmed image before rebooting.
+          required: false
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: Include exact success/failure lines and post-reboot PCI/driver state if available.
+      render: text
+    validations:
+      required: true

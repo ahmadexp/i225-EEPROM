@@ -3,7 +3,15 @@
 i225nvm
 
 # device dumps / backups produced at runtime
+backups/
 backup_*.bin
+*.bin
+*.eep
+*.rom
+
+# local firmware checkouts / staging directories
+firmware/
+firmware-src/
 
 # local OS metadata
 .DS_Store
