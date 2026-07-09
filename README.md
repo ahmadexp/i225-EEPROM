@@ -213,6 +213,84 @@ Kernel driver in use: igc
 On the recovered board, the interface appeared as `eth1` with MAC
 `00:a0:c9:00:00:00`.
 
+## Permanent MAC Address
+
+The permanent MAC address is stored in the first three 16-bit shadow-NVM words:
+
+| NVM word | File bytes | Meaning |
+| --- | --- | --- |
+| `0x00` | `0..1` | MAC bytes 0 and 1 |
+| `0x01` | `2..3` | MAC bytes 2 and 3 |
+| `0x02` | `4..5` | MAC bytes 4 and 5 |
+
+The dump file is little-endian, so the first six bytes of `shadow.bin` are the
+MAC address in normal display order. After changing those bytes, recompute
+checksum word `0x3f` so words `0x00..0x3f` sum to `0xbaba`.
+
+Use a unique unicast MAC address. A `02:...` prefix is suitable for a locally
+administered address; do not reuse Intel's public OUI unless you have an
+assigned address.
+
+Example, setting `02:a0:c9:12:34:56`:
+
+```sh
+BDF=0001:01:00.0
+MAC=02:a0:c9:12:34:56
+
+sudo ./i225nvm dump -b "$BDF" -o shadow-before.bin
+cp shadow-before.bin shadow-mac.bin
+
+python3 - "$MAC" <<'PY'
+import sys
+from pathlib import Path
+
+mac = bytes(int(x, 16) for x in sys.argv[1].split(":"))
+if len(mac) != 6:
+    raise SystemExit("MAC must have 6 octets")
+if mac[0] & 1:
+    raise SystemExit("MAC must be unicast; first octet must not be odd")
+
+p = Path("shadow-mac.bin")
+data = bytearray(p.read_bytes())
+if len(data) < 0x80:
+    raise SystemExit("shadow dump too small")
+
+data[0:6] = mac
+
+# Intel NVM checksum: words 0x00..0x3f must sum to 0xbaba.
+words = [data[i] | (data[i + 1] << 8) for i in range(0, 0x80, 2)]
+checksum = (0xBABA - sum(words[:0x3f])) & 0xffff
+data[0x7e] = checksum & 0xff
+data[0x7f] = checksum >> 8
+
+p.write_bytes(data)
+print(f"checksum word 0x3f = 0x{checksum:04x}")
+PY
+```
+
+Dry-run first. Then write only the first 64 words, which include the MAC words
+and checksum word:
+
+```sh
+sudo ./i225nvm write -b "$BDF" -i shadow-mac.bin -n 64
+
+if [ -e /sys/bus/pci/devices/$BDF/driver/unbind ]; then
+  printf '%s\n' "$BDF" | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
+fi
+
+sudo ./i225nvm write -b "$BDF" -i shadow-mac.bin -n 64 --write --fix-checksum
+sudo ./i225nvm verify -b "$BDF" -i shadow-mac.bin -n 64
+sudo ./i225nvm checksum -b "$BDF"
+sudo reboot
+```
+
+After reboot, confirm the address from Linux:
+
+```sh
+ip -br link
+cat /sys/class/net/eth1/address
+```
+
 ## Restore
 
 For raw-flash recovery, restore with `flashwrite`, not the shadow-RAM `write`
