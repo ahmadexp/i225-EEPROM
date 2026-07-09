@@ -33,7 +33,7 @@ The firmware binary is not vendored in this repo. Fetch it from the exact
 source commit used for the recovery:
 
 ```sh
-git clone https://github.com/hunghvu/Intel-I226-V-NVM-Firmware.git firmware-src
+git clone https://github.com/ahmadexp/Intel-I226-V-NVM-Firmware.git firmware-src
 cd firmware-src
 git checkout 63b84a447449af2368a18bd1cf214ccf22ffbd40
 sha256sum I226-V/2.32/FXVL_125C_V_1MB_2.32.bin
@@ -43,7 +43,7 @@ Expected binary details:
 
 | Field | Value |
 | --- | --- |
-| Source repo | `https://github.com/hunghvu/Intel-I226-V-NVM-Firmware` |
+| Source repo | `https://github.com/ahmadexp/Intel-I226-V-NVM-Firmware` |
 | Source commit | `63b84a447449af2368a18bd1cf214ccf22ffbd40` |
 | File | `I226-V/2.32/FXVL_125C_V_1MB_2.32.bin` |
 | Size | `1048576` bytes |
