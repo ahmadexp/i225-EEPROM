@@ -1,137 +1,317 @@
-# i225nvm 
-# Native NVM/EEPROM tool for Intel i225/i226 from source
+# i225nvm
 
-A clean-room, ARM-compilable reimplementation of the shadow-RAM programming
-path performed by Intel's proprietary `nvmupdate64e`, intended to run natively
-on a Raspberry Pi 5 / CM4 against an Intel **i225/i226 (Foxville)** NIC on the
-PCIe bus.
+Native Linux/ARM NVM/EEPROM recovery tool for Intel i225/i226 Foxville
+controllers, built from source.
 
-## Why this exists
+This repo was built to recover an Intel I226-V on a Raspberry Pi after the
+controller enumerated as the blank-NVM PCI ID `8086:125f` and the Linux `igc`
+driver refused to bind with an invalid NVM checksum. The successful recovery
+programmed a 1 MB I226-V image and the controller now enumerates as
+`8086:125c` with `igc` bound.
 
-`nvmupdate64e` is a 4.5 MB, stripped, proprietary **x86-64** ELF. It cannot run
-natively on the Pi's ARM CPU. Rather than decompile Intel's binary (impractical
-and legally fraught — it bundles a dozen controller families), this tool
-re-implements only the piece you need for the i225, from the **publicly
-documented register interface** (Intel i225 datasheet/EDS) and the semantics of
-the **GPL Linux `igc`/`igb` drivers**.
+## Tested Recovery
 
-### How the original binary reaches the hardware (from RE)
+Tested target:
 
-Analysis of `nvmupdate64e` (imports + strings) shows it accesses the NIC's
-control/status registers (CSRs) via, in order of relevance to ARM:
+| Item | Value |
+| --- | --- |
+| Host | Raspberry Pi, ARM64 Linux |
+| PCI BDF | `0001:01:00.0` |
+| Before flash | `8086:125f`, `I226 (blank NVM)` |
+| After flash | `8086:125c`, `Intel Ethernet Controller I226-V` |
+| Driver after reboot | `igc` |
+| Flash size on this board | 1 MB |
+| Programmed image | `FXVL_125C_V_1MB_2.32.bin` |
 
-1. **BAR0 MMIO** through `/dev/mem` or sysfs `resource0` — *architecture
-   neutral*, works identically on the Pi. **This is what this port uses.**
-2. **PCI config space** via `/sys/bus/pci/devices/<bdf>/config` — also neutral.
-3. **x86 port-I/O** (`ioperm`) + an Intel `/dev/nal` kernel shim — an x86-only
-   *fallback*. Not needed on ARM as long as (1) works.
+The tested board had an SST/Microchip SPI flash. Its status register initially
+reported `0x1c`, meaning block-protect bits were set. Current `flashwrite`
+clears the common protection bits before erase/program.
 
-The i225 NVM itself is a word-addressable **Shadow RAM** mirrored to backing
-flash: words are read via `EERD`, written via `SRWR`, arbitrated by a
-software/firmware semaphore (`SWSM`/`SW_FW_SYNC`), committed to flash with
-`EEC.FLUPD`, and protected by a `0xBABA` checksum at word `0x3F`. All of that is
-documented and reimplemented here in `src/nvm.c`.
+## Firmware Image
+
+The firmware binary is not vendored in this repo. Fetch it from the exact
+source commit used for the recovery:
+
+```sh
+git clone https://github.com/hunghvu/Intel-I226-V-NVM-Firmware.git firmware-src
+cd firmware-src
+git checkout 63b84a447449af2368a18bd1cf214ccf22ffbd40
+sha256sum I226-V/2.32/FXVL_125C_V_1MB_2.32.bin
+```
+
+Expected binary details:
+
+| Field | Value |
+| --- | --- |
+| Source repo | `https://github.com/hunghvu/Intel-I226-V-NVM-Firmware` |
+| Source commit | `63b84a447449af2368a18bd1cf214ccf22ffbd40` |
+| File | `I226-V/2.32/FXVL_125C_V_1MB_2.32.bin` |
+| Size | `1048576` bytes |
+| SHA-256 | `881434a8e54ebaf70117dd5061c3a2f04b16fe1cc3e443777337fb6774892024` |
+| ETrack ID | `0x80000425` |
+| Programmed PCI ID in image | `8086:125c` |
+
+Do not use the I225 `15F2` images for an I226 blank-NVM device. Do not use the
+2 MB I226 image on the tested board; a 2 MB attempt failed near the halfway
+point because the fitted flash is 1 MB.
 
 ## Build
 
-On the Raspberry Pi (native):
+Build natively on the Raspberry Pi:
 
 ```sh
+make clean
 make
 ```
 
-Cross-compiling from an x86 Linux host:
+Cross-compile from another Linux host:
 
 ```sh
 make CROSS=aarch64-linux-gnu-
 ```
 
-## Usage
+The tool must run as root because it maps PCI BAR0 and accesses NVM control
+registers.
 
-Run as **root** (BAR0 mapping + NVM access require it).
+## Quick Identification
 
-```sh
-./i225nvm list                        # enumerate i225/i226 controllers
-./i225nvm dump  -o backup.bin         # back up the shadow RAM
-./i225nvm checksum                    # report checksum validity
-./i225nvm write -i image.bin          # DRY RUN (default): shows plan + backup
-./i225nvm write -i image.bin --write --fix-checksum   # program shadow RAM
-./i225nvm verify -i image.bin         # compare device vs image
-
-# Full external SPI flash (OROM / combo / whole 2 MB image):
-./i225nvm flashdump  -o full.bin      # read the WHOLE flash (safe, do this first)
-./i225nvm flashwrite -i image.bin     # DRY RUN: full backup + shows plan
-./i225nvm flashwrite -i image.bin --write --force-flash   # DESTRUCTIVE full rewrite
-```
-
-Select a specific device with `-b 0000:01:00.0` when more than one is present.
-
-### Before writing
-
-The kernel `igc` driver will be bound to the NIC. Unbind it first so it doesn't
-race the NVM state machine:
+Find the controller and confirm whether it is still blank:
 
 ```sh
-echo 0000:01:00.0 > /sys/bus/pci/drivers/igc/unbind
+lspci -nn | grep -Ei '8086:125f|8086:125c|i225|i226|ethernet'
+sudo ./i225nvm list
 ```
 
-## Safety model
+For the tested Pi setup:
 
-- **Dry-run by default.** `write` only plans + backs up unless you pass `--write`.
-- **Mandatory backup** is taken (`backup_<bdf>_<timestamp>.bin`) before any write.
-- **Verify-after**: every programmed word is read back and compared.
-- **Checksum** is recomputed and committed last with `--fix-checksum`.
+```sh
+BDF=0001:01:00.0
+```
 
-If verification fails, restore with:
-`./i225nvm write -i backup_<...>.bin --write`
+Before recovery, `igc` logged:
 
-## Two programming paths
+```text
+The NVM Checksum Is Not Valid
+probe with driver igc failed with error -5
+```
 
-**1. Shadow-RAM (`write`)** — word-addressable EEPROM region (config words,
-MAC/PBA, PHY, OROM pointers, checksum), committed to flash via `EEC.FLUPD`.
-This is the driver-supported, lower-risk path and covers the common
-"reprogram the device configuration / EEPID" use case.
+Blank or invalid NVM can leave PCI `COMMAND.MEM` disabled and BAR0 programmed as
+zero after the failed driver probe. `i225nvm` repairs that locally by restoring
+BAR0 from sysfs `resource0` and enabling MMIO before mapping BAR0.
 
-**2. Raw external flash (`flashwrite`)** — sector-erase + page-program + verify
-of the whole SPI flash through the `FLSW` register interface (`FLSWCTL`
-`0x12048`, `FLSWDATA` `0x1204c`, `FLSWCNT` `0x12050`) after the `FLA`
-request/grant handshake. This rewrites the entire image (OROM / combo /
-everything) and is what's needed for a full 2 MB `.bin`.
+## Reproducible Flash Procedure
 
-### What was recovered vs. what you must confirm
+These commands assume the firmware repo was cloned next to this repo. Adjust
+paths if your layout differs.
 
-The raw-flash register facts came from RE of the stock binary plus the
-i210/i225 datasheet:
+1. Prepare directories and copy the known-good 1 MB image:
 
-- **Confirmed from the binary**: the `FLSWCTL`/`FLSWDATA`/`FLSWCNT` and `FLA`
-  offsets; `FLA.FL_REQ`=`0x10` / `FL_GNT`=`0x20`; `FLSWCTL.BUSY`=`0x40000000`,
-  `DONE`=`0x10000000`; the "flash cycle did not complete" timeout path.
-- **Datasheet convention, marked `[VERIFY]` in `src/flash.c`**: the CMD-opcode
-  field values (read/write/erase), the command-valid (`CMDV`) and fail bits, and
-  the sector/page geometry. **Confirm these against your i225 EDS on a
-  sacrificial unit before trusting a destructive write.** Read-only access
-  (`flashdump`) degrades safely if they're off (it just times out), so validate
-  the interface with a full dump + a re-read-compares-equal check first.
+```sh
+mkdir -p firmware backups
+cp ../firmware-src/I226-V/2.32/FXVL_125C_V_1MB_2.32.bin firmware/
+sha256sum firmware/FXVL_125C_V_1MB_2.32.bin
+```
 
-## Safety warnings
+Expected hash:
 
-- **You can brick the NIC** with `flashwrite`. It is double-gated (`--write`
-  **and** `--force-flash`) and always takes a full-flash backup first.
-- Always keep the auto-backup (`backup_<bdf>_<timestamp>.bin`).
-- Register offsets for the shadow-RAM path match the public `igc` driver but
-  were validated against the datasheet, not your specific silicon stepping —
-  verify with `dump` + `verify` on a spare unit first.
-- The firmware image referenced by `nvmupdate.cfg`
-  (`FoxPond1_I225_15F2_2MB_1p94_800003BB.bin`) and the EEPROM map file are **not
-  in this repo** — supply your own `.bin` to `-i`.
+```text
+881434a8e54ebaf70117dd5061c3a2f04b16fe1cc3e443777337fb6774892024
+```
+
+2. If `igc` is bound, unbind it before raw NVM work:
+
+```sh
+if [ -e /sys/bus/pci/devices/$BDF/driver/unbind ]; then
+  printf '%s\n' "$BDF" | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
+fi
+```
+
+3. Take two explicit 1 MB prewrite backups and compare them:
+
+```sh
+sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/prewrite-1mb-a.bin
+sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/prewrite-1mb-b.bin
+sha256sum backups/prewrite-1mb-a.bin backups/prewrite-1mb-b.bin
+cmp backups/prewrite-1mb-a.bin backups/prewrite-1mb-b.bin
+```
+
+Stop if the two backups differ.
+
+4. Optional: read the SPI flash status register. On the recovery board this was
+`0x1c` before clearing protection.
+
+```sh
+sudo I225NVM_OP=4 I225NVM_COUNT=1 ./i225nvm flsw -b "$BDF"
+```
+
+Current `flashwrite` clears common block-protect bits automatically. If you are
+using an older build, the manual clear sequence is:
+
+```sh
+sudo I225NVM_OP=6 I225NVM_COUNT=0 ./i225nvm flsw -b "$BDF"
+sudo I225NVM_OP=5 I225NVM_COUNT=1 I225NVM_DATA=0x00 ./i225nvm flsw -b "$BDF"
+sudo I225NVM_OP=4 I225NVM_COUNT=1 ./i225nvm flsw -b "$BDF"
+```
+
+5. Dry-run the write. This takes another automatic backup but does not erase:
+
+```sh
+sudo ./i225nvm flashwrite -b "$BDF" \
+  -i firmware/FXVL_125C_V_1MB_2.32.bin
+```
+
+6. Perform the destructive write:
+
+```sh
+sudo ./i225nvm flashwrite -b "$BDF" \
+  -i firmware/FXVL_125C_V_1MB_2.32.bin \
+  --write --force-flash
+```
+
+Expected success line:
+
+```text
+SUCCESS: full flash programmed and verified. Reboot to apply.
+```
+
+7. Take an independent post-write dump and compare it to the input image:
+
+```sh
+sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/postwrite-1mb.bin
+sha256sum backups/postwrite-1mb.bin firmware/FXVL_125C_V_1MB_2.32.bin
+cmp backups/postwrite-1mb.bin firmware/FXVL_125C_V_1MB_2.32.bin
+```
+
+Both hashes should be:
+
+```text
+881434a8e54ebaf70117dd5061c3a2f04b16fe1cc3e443777337fb6774892024
+```
+
+8. Reboot so PCIe/NVM auto-load uses the new flash contents:
+
+```sh
+sudo reboot
+```
+
+9. Verify after reboot:
+
+```sh
+lspci -nn -s "$BDF"
+lspci -nn -vv -s "$BDF" | sed -n '1,20p'
+dmesg | grep -Ei 'igc|i225|i226|125c|125f|NVM' | tail -40
+ip -br link
+```
+
+Expected result:
+
+```text
+Intel Corporation Ethernet Controller I226-V [8086:125c]
+Kernel driver in use: igc
+```
+
+On the recovered board, the interface appeared as `eth1` with MAC
+`00:a0:c9:00:00:00`.
+
+## Restore
+
+For raw-flash recovery, restore with `flashwrite`, not the shadow-RAM `write`
+command:
+
+```sh
+sudo ./i225nvm flashwrite -b "$BDF" \
+  -i backups/prewrite-1mb-a.bin \
+  --write --force-flash
+```
+
+Keep every `backup_<bdf>_<timestamp>.bin` produced by `flashwrite`; those are
+the automatic prewrite raw-flash backups.
+
+## Command Summary
+
+Read-only commands:
+
+```sh
+sudo ./i225nvm list
+sudo ./i225nvm checksum -b "$BDF"
+sudo ./i225nvm dump -b "$BDF" -o shadow.bin
+sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o full.bin
+```
+
+Shadow-RAM commands, for config-word repair only:
+
+```sh
+sudo ./i225nvm write -b "$BDF" -i shadow.bin
+sudo ./i225nvm write -b "$BDF" -i shadow.bin --write --fix-checksum
+sudo ./i225nvm verify -b "$BDF" -i shadow.bin
+```
+
+Raw full-flash commands, for whole firmware images:
+
+```sh
+sudo ./i225nvm flashwrite -b "$BDF" -i image.bin
+sudo ./i225nvm flashwrite -b "$BDF" -i image.bin --write --force-flash
+```
+
+## Implementation Notes
+
+The tool uses BAR0 MMIO through Linux sysfs resources. It does not need Intel's
+x86-only `/dev/nal` path.
+
+Relevant Foxville registers:
+
+| Register | Offset | Purpose |
+| --- | --- | --- |
+| `EERD` | `0x12014` | EEPROM-mode shadow-RAM read |
+| `SRWR`/`EEWR` | `0x12018` | EEPROM-mode shadow-RAM write |
+| `FLA` | `0x1201c` | Flash access/status, size hint, abort clear |
+| `FLSWCTL` | `0x12048` | Software flash command/address/status |
+| `FLSWDATA` | `0x1204c` | Software flash data |
+| `FLSWCNT` | `0x12050` | Software flash byte count |
+| `FLSECU` | `0x12114` | Flash security status |
+
+FLSW command opcodes used here:
+
+| Opcode | Meaning |
+| --- | --- |
+| `0` | Read |
+| `1` | Write/page program |
+| `2` | 4 KB sector erase |
+| `3` | Device erase |
+| `4` | Read SPI status register |
+| `5` | Write SPI status register |
+| `6` | Write enable |
+| `8` | Read JEDEC ID |
+
+FLSW status bits:
+
+| Bit | Mask |
+| --- | --- |
+| `CMDV` | `0x10000000` |
+| `FLBUSY` | `0x20000000` |
+| `DONE` | `0x40000000` |
+| `GLDONE` | `0x80000000` |
+
+`flashwrite` waits for idle, erases 4 KB sectors, writes in 256-byte pages, and
+verifies by reading the image back.
 
 ## Files
 
 | File | Purpose |
-|------|---------|
-| `src/igc_regs.h` | i225/i226 register + bit definitions (public/datasheet) |
-| `src/pci.[ch]`   | sysfs PCIe discovery + BAR0 mmap + MMIO accessors |
-| `src/nvm.[ch]`   | semaphore, `EERD`/`SRWR`, checksum, `FLUPD` commit |
-| `src/flash.[ch]` | raw SPI flash via `FLSW` regs: read/erase/program/verify |
-| `src/image.[ch]` | `.bin` load/save/validate |
-| `src/main.c`     | CLI (list/dump/verify/checksum/write/flashdump/flashwrite) |
+| --- | --- |
+| `src/igc_regs.h` | i225/i226 register and bit definitions |
+| `src/pci.[ch]` | sysfs PCIe discovery, BAR0 repair, mmap, MMIO accessors |
+| `src/nvm.[ch]` | semaphore, `EERD`/`SRWR`, checksum, `FLUPD` commit |
+| `src/flash.[ch]` | raw SPI flash via `FLSW`, unprotect, erase, program, verify |
+| `src/image.[ch]` | `.bin` load/save helpers |
+| `src/main.c` | CLI commands |
+| `RE_NOTES.md` | reverse-engineering notes and bench log |
+
+## References
+
+- Firmware image source:
+  `https://github.com/hunghvu/Intel-I226-V-NVM-Firmware`
+- Foxville/I225 software manual mirror used for register/flow confirmation:
+  `https://dokumen.pub/intel-foxville-i225-25-gbps-ethernet-controller-software-user-manual-13nbsped.html`
+- Public i210 FLSW implementation used for cross-checking command flow:
+  `https://lore.barebox.org/barebox/1453089161-6697-19-git-send-email-andrew.smirnov%40gmail.com/`

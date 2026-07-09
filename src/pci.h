@@ -24,6 +24,7 @@ struct pci_dev {
     volatile uint8_t *bar0;    /* mmapped BAR0 base */
     size_t   bar0_len;
     int      bar0_fd;
+    int      enabled_by_us;
 };
 
 /* Scan sysfs for Intel i225/i226 controllers. Fills up to `max` entries and

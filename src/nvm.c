@@ -12,6 +12,8 @@
 
 /* ----- low-level semaphore (SWSM SMBI + SWESMBI) ------------------------ */
 
+static void put_hw_semaphore(const struct pci_dev *d);
+
 static int get_hw_semaphore(const struct pci_dev *d)
 {
     /* Phase 1: acquire the driver mailbox bit (SMBI). */
@@ -22,8 +24,19 @@ static int get_hw_semaphore(const struct pci_dev *d)
             break;
         usleep(50);
     }
-    if (i == IGC_SWSM_ATTEMPTS)
-        return -EBUSY;   /* SMBI stuck: another SW instance holds it */
+    if (i == IGC_SWSM_ATTEMPTS) {
+        /* Match Intel's i225 flow: if a previous failed probe left SMBI set,
+         * clear the hardware semaphore once before giving up. */
+        put_hw_semaphore(d);
+        for (i = 0; i < IGC_SWSM_ATTEMPTS; i++) {
+            uint32_t swsm = igc_rd32(d, IGC_SWSM);
+            if (!(swsm & IGC_SWSM_SMBI))
+                break;
+            usleep(50);
+        }
+        if (i == IGC_SWSM_ATTEMPTS)
+            return -EBUSY;   /* SMBI stuck: another SW instance holds it */
+    }
 
     /* Phase 2: acquire the SW EEPROM semaphore (SWESMBI). */
     for (i = 0; i < IGC_SWSM_ATTEMPTS; i++) {

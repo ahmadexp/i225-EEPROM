@@ -5,5 +5,8 @@ i225nvm
 # device dumps / backups produced at runtime
 backup_*.bin
 
+# local OS metadata
+.DS_Store
+
 # Intel's proprietary NVM update binary — not redistributable
 nvmupdate64e

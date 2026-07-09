@@ -6,11 +6,9 @@
  * word-level Shadow-RAM path in nvm.[ch]. It is the higher-risk path -- a bad
  * write bricks the NIC -- so it is gated behind an explicit opt-in in main.c.
  *
- * The register offsets and the FLA request/grant + FLSWCTL BUSY/DONE poll bits
- * were recovered from the stock nvmupdate binary (interoperability RE of
- * hardware facts) and cross-checked against the i210/i225 datasheet. The CMD
- * opcode field values are the datasheet convention and are flagged for
- * on-hardware confirmation -- see flash.c.
+ * The register offsets, NVM semaphore ownership, FLSWCTL command opcodes, and
+ * FLSWCTL status bits match the public i210/i225 flash-mode convention.
+ * Validate with a non-destructive flashdump before attempting a raw write.
  */
 #ifndef FLASH_H
 #define FLASH_H
@@ -19,11 +17,17 @@
 #include <stddef.h>
 #include "pci.h"
 
-/* Grab / drop the shared flash resource (FLA.FL_REQ / FL_GNT). */
+/* Grab / drop the shared NVM/flash resource. */
 int  flash_acquire(const struct pci_dev *d);
 void flash_release(const struct pci_dev *d);
 
-/* Report detected flash size in bytes (from EEC.FL_SIZE), 0 if unknown. */
+/* Raw single FLSW transaction (diagnostics / opcode discovery). Returns the
+ * final FLSWCTL status in *ctl_out and FLSWDATA in *data_out. */
+int flash_raw_txn(const struct pci_dev *d, uint32_t op, uint32_t addr,
+                  uint32_t nbytes, int has_data, uint32_t data_in,
+                  uint32_t *ctl_out, uint32_t *data_out);
+
+/* Report detected flash size in bytes (from FLA.FL_SIZE), 0 if unknown. */
 size_t flash_size_bytes(const struct pci_dev *d);
 
 /* Read `len` bytes from flash byte-offset `addr` into `buf`.

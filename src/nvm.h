@@ -26,7 +26,7 @@ int nvm_read_block(const struct pci_dev *d, uint16_t offset,
 int nvm_write_block(const struct pci_dev *d, uint16_t offset,
                     uint16_t count, const uint16_t *buf);
 
-/* Commit the shadow RAM to the backing flash (EEC.FLUPD -> poll FLUDONE). */
+/* Commit the shadow RAM to the backing flash (EECD.FLUPD -> poll FLUDONE). */
 int nvm_flash_commit(const struct pci_dev *d);
 
 /* Checksum helpers over words [0x00 .. NVM_CHECKSUM_REG]. */

@@ -26,7 +26,7 @@
 #define MAX_DEV 16
 
 enum cmd { CMD_LIST, CMD_DUMP, CMD_VERIFY, CMD_CHECKSUM, CMD_WRITE,
-           CMD_FLASHDUMP, CMD_FLASHWRITE, CMD_HELP };
+           CMD_FLASHDUMP, CMD_FLASHWRITE, CMD_FLSW, CMD_HELP };
 
 struct opts {
     enum cmd cmd;
@@ -67,8 +67,8 @@ static void usage(void)
 "  * write      -> word-addressable Shadow-RAM / EEPROM region (lower risk)\n"
 "  * flashwrite -> raw full external SPI flash: OROM/combo/everything. This\n"
 "                  CAN BRICK the NIC. Requires --write AND --force-flash, and\n"
-"                  the FLSW CMD constants in flash.c should be confirmed\n"
-"                  against your i225 datasheet first (see README).\n",
+"                  should be validated with repeatable flashdump reads first\n"
+"                  (see README).\n",
         IGC_NVM_SHADOW_WORDS);
 }
 
@@ -336,7 +336,13 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
 
     /* Always take a full backup first. */
     size_t fsz = flash_size_bytes(d);
-    size_t blen = fsz ? fsz : len;
+    if (fsz)
+        printf("Detected flash-size hint: %zu bytes\n", fsz);
+    else
+        printf("Flash-size hint unavailable; using image length for backup.\n");
+    size_t blen = fsz > len ? fsz : len;
+    if (fsz && fsz < len)
+        printf("Image is larger than detected hint; backing up %zu bytes anyway.\n", blen);
     uint8_t *backup = malloc(blen);
     if (backup && flash_acquire(d) == 0) {
         if (flash_read(d, 0, backup, blen) == 0) {
@@ -377,8 +383,40 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
     return 0;
 }
 
+static int do_flsw(const struct pci_dev *d)
+{
+    /* env-driven: I225NVM_OP (opcode), I225NVM_ADDR, optional I225NVM_DATA */
+    const char *e_op = getenv("I225NVM_OP");
+    const char *e_ad = getenv("I225NVM_ADDR");
+    const char *e_da = getenv("I225NVM_DATA");
+    const char *e_ct = getenv("I225NVM_COUNT");
+    if (!e_op) { fprintf(stderr, "set I225NVM_OP=<n> [I225NVM_ADDR=..] [I225NVM_DATA=..]\n"); return 2; }
+    uint32_t op   = (uint32_t)strtoul(e_op, 0, 0);
+    uint32_t addr = e_ad ? (uint32_t)strtoul(e_ad, 0, 0) : 0;
+    uint32_t cnt  = e_ct ? (uint32_t)strtoul(e_ct, 0, 0) : 4;
+    int has_data  = e_da ? 1 : 0;
+    uint32_t din  = e_da ? (uint32_t)strtoul(e_da, 0, 0) : 0;
+
+    const char *e_rep = getenv("I225NVM_REPEAT");
+    int reps = e_rep ? atoi(e_rep) : 1;
+    if (reps < 1) reps = 1;
+
+    int rc = flash_acquire(d);
+    if (rc) { fprintf(stderr, "flash acquire: %s\n", strerror(-rc)); return 1; }
+    for (int i = 0; i < reps; i++) {
+        uint32_t ctl = 0, dout = 0;
+        rc = flash_raw_txn(d, op, addr, cnt, has_data, din, &ctl, &dout);
+        if (rc) { flash_release(d); fprintf(stderr, "txn: %s\n", strerror(-rc)); return 1; }
+        printf("[%d] op=%u addr=0x%06x -> ctl=0x%08x FLSWDATA=0x%08x\n",
+               i, op, addr, ctl, dout);
+    }
+    flash_release(d);
+    return 0;
+}
+
 static enum cmd parse_cmd(const char *s)
 {
+    if (!strcmp(s, "flsw"))       return CMD_FLSW;
     if (!strcmp(s, "list"))       return CMD_LIST;
     if (!strcmp(s, "dump"))       return CMD_DUMP;
     if (!strcmp(s, "verify"))     return CMD_VERIFY;
@@ -443,6 +481,7 @@ int main(int argc, char **argv)
     case CMD_WRITE:    ret = do_write(d, &o);    break;
     case CMD_FLASHDUMP:  ret = do_flashdump(d, &o);  break;
     case CMD_FLASHWRITE: ret = do_flashwrite(d, &o); break;
+    case CMD_FLSW:       ret = do_flsw(d);           break;
     default:           usage();                  break;
     }
 

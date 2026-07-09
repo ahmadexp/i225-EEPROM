@@ -28,6 +28,11 @@
 #define I226_V                   0x125C
 #define I226_IT                  0x125D
 
+/* Blank/invalid-NVM defaults: a Foxville part with an empty EEPROM enumerates
+ * with these IDs until a valid image is programmed. */
+#define I225_BLANK_NVM           0x15FF
+#define I226_BLANK_NVM           0x125F
+
 /* --- Core CSRs (BAR0 byte offsets) -------------------------------------- */
 #define IGC_CTRL                 0x00000  /* Device Control */
 #define IGC_STATUS               0x00008  /* Device Status */
@@ -35,11 +40,13 @@
 #define IGC_MDIC                 0x00020  /* MDI Control */
 
 /* --- NVM / EEPROM / Flash control (the block that matters here) --------- */
-#define IGC_EEC                  0x12010  /* EEPROM/Flash Control & Data */
+#define IGC_EECD                 0x00010  /* EEPROM/Flash Control & Data */
+#define IGC_EEC                  IGC_EECD
 #define IGC_EERD                 0x12014  /* EEPROM Read (Shadow RAM read) */
 #define IGC_SRWR                 0x12018  /* Shadow RAM Write Register */
 #define IGC_FLA                  0x1201C  /* Flash Access (SPI bit-bang) */
 #define IGC_EEARBC_I225          0x12024  /* NVM Auto Read Bus Control */
+#define IGC_FLSECU               0x12114  /* Flash Security */
 
 /* --- Software / firmware semaphores ------------------------------------- */
 #define IGC_SWSM                 0x05B50  /* Software Semaphore */
@@ -49,11 +56,15 @@
 /* --- STATUS bits -------------------------------------------------------- */
 #define IGC_STATUS_LU            0x00000002  /* Link Up */
 
-/* --- EEC (0x12010) bits ------------------------------------------------- */
+/* --- EECD / EEC bits ---------------------------------------------------- */
 #define IGC_EEC_FLASH_DETECTED   0x00080000  /* External flash present */
 #define IGC_EEC_FLUPD            0x00800000  /* Update Flash (commit) */
 #define IGC_EEC_FLUDONE          0x04000000  /* Flash update done */
-#define IGC_EEC_SEC1VAL          0x00400000  /* Sector 1 valid (active bank) */
+#define IGC_EEC_SEC1VAL          0x02000000  /* Sector 1 valid (active bank) */
+
+/* --- FWSM / FLSECU bits ------------------------------------------------- */
+#define IGC_FWSM_FW_VALID_I225   0x00008000  /* Manageability firmware valid */
+#define IGC_FLSECU_BLK_SW_ACCESS_I225 0x00000004  /* SW flash writes blocked */
 
 /* --- Shadow RAM read/write register layout (EERD / SRWR) ---------------- */
 #define IGC_NVM_RW_REG_DATA      16   /* data field shift within the reg */
