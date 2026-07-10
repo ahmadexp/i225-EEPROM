@@ -14,6 +14,10 @@ By default, `flashwrite` picks a fresh locally administered unicast MAC,
 patches image bytes `0..5`, recomputes checksum word `0x3f`, and saves the
 exact image it will program as `patched_...mac-...bin`.
 
+Generated and explicit MAC addresses are checked against all-zero, broadcast,
+group/multicast, and common standards special-use prefixes before the image is
+patched.
+
 ```sh
 BDF=0001:01:00.0
 SRC=firmware/FXVL_125C_V_1MB_2.32.bin
@@ -36,9 +40,10 @@ If you omit `--mac`, the write command intentionally chooses a new random MAC.
 
 ## Deterministic MAC
 
-Use a unique nonzero unicast MAC address. A `02:...` prefix is suitable for a
-locally administered address; do not reuse Intel's public OUI unless you have
-an assigned address.
+Use a unique nonzero unicast MAC address. The tool rejects all-zero, broadcast,
+group/multicast, and common standards special-use prefixes. A `02:...` prefix
+is suitable for a locally administered address; do not reuse Intel's public OUI
+unless you have an assigned address.
 
 ```sh
 BDF=0001:01:00.0

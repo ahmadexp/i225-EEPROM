@@ -44,6 +44,10 @@ the image before programming. Compare post-write dumps against the printed
 `patched_...mac-...bin` file, or pass `--keep-image-mac` if you intentionally
 want the input image's MAC bytes unchanged.
 
+Generated and explicit MAC addresses are checked against all-zero, broadcast,
+group/multicast, and common standards special-use prefixes before the image is
+patched.
+
 This project is not affiliated with Intel, Raspberry Pi, or any board vendor.
 Firmware binaries are not vendored here.
 
@@ -316,9 +320,10 @@ verified before reboot but did not persist across reboot. For a permanent
 change, program the full image with `flashwrite`; it patches bytes `0..5` and
 recomputes checksum word `0x3f` before writing.
 
-Use a unique unicast MAC address. A `02:...` prefix is suitable for a locally
-administered address; do not reuse Intel's public OUI unless you have an
-assigned address.
+Use a unique unicast MAC address. The tool rejects all-zero, broadcast,
+group/multicast, and common standards special-use prefixes. A `02:...` prefix
+is suitable for a locally administered address; do not reuse Intel's public OUI
+unless you have an assigned address.
 
 By default `flashwrite` picks a fresh random locally administered unicast MAC
 and saves the exact patched image as `patched_...mac-...bin`.

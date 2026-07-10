@@ -32,7 +32,7 @@
 | `--write` | Actually program the device. Without it, write commands dry-run. |
 | `--fix-checksum` | Recompute checksum after shadow writes. |
 | `--force-flash` | Required with `--write` for destructive full-flash writes. |
-| `--mac MAC` | `flashwrite` only: patch the image with this nonzero unicast permanent MAC instead of a random one. |
+| `--mac MAC` | `flashwrite` only: patch the image with this nonzero unicast permanent MAC instead of a random one. Reserved and special-use addresses are rejected. |
 | `--keep-image-mac` | `flashwrite` only: preserve the input image MAC bytes instead of patching a random MAC. |
 
 ## Diagnostic FLSW Access

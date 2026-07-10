@@ -23,6 +23,8 @@ Use this checklist before any raw SPI flash write.
 - Run `flashwrite` once without `--write --force-flash` as a dry run.
 - Record the generated MAC and `patched_...mac-...bin` path, or decide on an
   explicit `--mac` value before the real write.
+- Confirm any explicit `--mac` value is unique and not a standards special-use
+  address.
 
 ## During Programming
 

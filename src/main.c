@@ -137,23 +137,92 @@ static int mac_is_all_zero(const uint8_t mac[6])
            mac[3] == 0 && mac[4] == 0 && mac[5] == 0;
 }
 
-static int parse_mac(const char *s, uint8_t mac[6])
+static int mac_is_broadcast(const uint8_t mac[6])
+{
+    return mac[0] == 0xff && mac[1] == 0xff && mac[2] == 0xff &&
+           mac[3] == 0xff && mac[4] == 0xff && mac[5] == 0xff;
+}
+
+static int mac_has_prefix(const uint8_t mac[6], const uint8_t *prefix,
+                          size_t prefix_len)
+{
+    for (size_t i = 0; i < prefix_len; i++)
+        if (mac[i] != prefix[i])
+            return 0;
+    return 1;
+}
+
+static int mac_laa_zero_suffix(const uint8_t mac[6])
+{
+    return (mac[0] & 0x02) && mac[1] == 0 && mac[2] == 0 &&
+           mac[3] == 0 && mac[4] == 0 && mac[5] == 0;
+}
+
+struct mac_reserved_prefix {
+    uint8_t prefix[6];
+    size_t prefix_len;
+    const char *reason;
+};
+
+static const struct mac_reserved_prefix reserved_mac_prefixes[] = {
+    { { 0x00, 0x00, 0x5e }, 3, "IANA 48-bit unicast OUI is reserved" },
+    { { 0x01, 0x00, 0x5e }, 3, "IANA IPv4 multicast prefix is reserved" },
+    { { 0x02, 0x00, 0x5e }, 3, "IANA modified EUI-64 prefix is reserved" },
+    { { 0x03, 0x00, 0x5e }, 3, "IANA multicast modified EUI-64 prefix is reserved" },
+    { { 0x01, 0x80, 0xc2 }, 3, "IEEE 802 standard group prefix is reserved" },
+    { { 0x33, 0x33 },       2, "IPv6 multicast prefix is reserved" },
+};
+
+static const char *mac_reject_reason(const uint8_t mac[6], int require_local)
+{
+    if (mac_is_all_zero(mac))
+        return "all-zero address is reserved";
+    if (mac_is_broadcast(mac))
+        return "broadcast address is reserved";
+    if (mac[0] & 0x01)
+        return "group/multicast address is reserved";
+    if (require_local && !(mac[0] & 0x02))
+        return "random address must be locally administered";
+    if (mac_laa_zero_suffix(mac))
+        return "locally administered zero-suffix address is reserved";
+
+    for (size_t i = 0; i < sizeof(reserved_mac_prefixes) /
+                           sizeof(reserved_mac_prefixes[0]); i++) {
+        const struct mac_reserved_prefix *p = &reserved_mac_prefixes[i];
+        if (mac_has_prefix(mac, p->prefix, p->prefix_len))
+            return p->reason;
+    }
+
+    return NULL;
+}
+
+static int parse_mac(const char *s, uint8_t mac[6], const char **why)
 {
     unsigned int b[6];
     char extra;
     int n = sscanf(s, "%x:%x:%x:%x:%x:%x%c",
                    &b[0], &b[1], &b[2], &b[3], &b[4], &b[5], &extra);
-    if (n != 6)
+    if (n != 6) {
+        if (why)
+            *why = "expected six hexadecimal octets";
         return -EINVAL;
+    }
 
     for (size_t i = 0; i < 6; i++) {
-        if (b[i] > 0xff)
+        if (b[i] > 0xff) {
+            if (why)
+                *why = "octet is larger than 0xff";
             return -EINVAL;
+        }
         mac[i] = (uint8_t)b[i];
     }
 
-    if ((mac[0] & 0x01) || mac_is_all_zero(mac))
+    const char *reject = mac_reject_reason(mac, 0);
+    if (reject) {
+        if (why)
+            *why = reject;
         return -EINVAL;
+    }
     return 0;
 }
 
@@ -162,14 +231,24 @@ static int random_mac(uint8_t mac[6])
     FILE *f = fopen("/dev/urandom", "rb");
     if (!f)
         return -errno;
-    size_t n = fread(mac, 1, 6, f);
-    int err = ferror(f) ? errno : 0;
-    fclose(f);
-    if (n != 6)
-        return err ? -err : -EIO;
 
-    mac[0] = (uint8_t)((mac[0] & 0xfc) | 0x02);
-    return 0;
+    int rc = -ERANGE;
+    for (int tries = 0; tries < 32; tries++) {
+        size_t n = fread(mac, 1, 6, f);
+        int err = ferror(f) ? errno : 0;
+        if (n != 6) {
+            rc = err ? -err : -EIO;
+            break;
+        }
+
+        mac[0] = (uint8_t)((mac[0] & 0xfc) | 0x02);
+        if (!mac_reject_reason(mac, 1)) {
+            rc = 0;
+            break;
+        }
+    }
+    fclose(f);
+    return rc;
 }
 
 /* Read the shadow span into a freshly allocated buffer. */
@@ -587,10 +666,11 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--fix-checksum"))     o.fix_checksum = 1;
         else if (!strcmp(a, "--force-flash"))      o.force_flash = 1;
         else if (!strcmp(a, "--mac") && i + 1 < argc) {
-            int prc = parse_mac(argv[++i], o.mac);
+            const char *why = NULL;
+            int prc = parse_mac(argv[++i], o.mac, &why);
             if (prc) {
-                fprintf(stderr,
-                        "invalid --mac: use a nonzero unicast address such as 02:a0:c9:12:34:56\n");
+                fprintf(stderr, "invalid --mac: %s\n",
+                        why ? why : "use a nonzero unicast address");
                 return 2;
             }
             o.use_fixed_mac = 1;
