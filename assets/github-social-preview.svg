@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">i225 NVM Flash 4 Pi GitHub social preview</title>
+  <desc id="desc">Social preview image for the i225 NVM Flash 4 Pi repository.</desc>
+  <defs>
+    <linearGradient id="chip" x1="836" y1="210" x2="1084" y2="408" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset=".5" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#64748b"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#020617" flood-opacity=".2"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="#f8fafc"/>
+  <rect x="0" y="0" width="1280" height="640" fill="#fee2e2" opacity=".28"/>
+  <path d="M0 520 C210 470 410 575 620 512 C800 458 950 410 1280 470 L1280 640 L0 640 Z" fill="#ffffff" opacity=".78"/>
+  <path d="M100 116 H560" stroke="#fb7185" stroke-width="8" stroke-linecap="round"/>
+  <path d="M100 544 H674" stroke="#0f172a" stroke-width="8" stroke-linecap="round" opacity=".16"/>
+
+  <g transform="translate(96 144)">
+    <text x="0" y="0" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="30" font-weight="900" letter-spacing="2" fill="#be123c">I225/I226 FOXVILLE</text>
+    <text x="0" y="92" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="82" font-weight="950" fill="#111827">NVM Flash 4 Pi</text>
+    <text x="0" y="155" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="29" font-weight="700" fill="#334155">Native ARM recovery for Intel i225/i226 NICs</text>
+    <g transform="translate(0 226)" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-weight="800" fill="#111827">
+      <rect x="0" y="0" width="206" height="54" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+      <text x="24" y="36" font-size="24">8086:125f</text>
+      <path d="M236 27 H318" stroke="#e11d48" stroke-width="8" stroke-linecap="round"/>
+      <path d="M318 27 l-22 -18 m22 18 l-22 18" stroke="#e11d48" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="348" y="0" width="208" height="54" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+      <text x="372" y="36" font-size="24">8086:125c</text>
+    </g>
+    <text x="0" y="345" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#475569">Blank I226 recovery + verified full-flash programming</text>
+  </g>
+
+  <g filter="url(#soft-shadow)">
+    <circle cx="990" cy="320" r="230" fill="#ffffff"/>
+    <circle cx="990" cy="320" r="214" fill="none" stroke="#e11d48" stroke-width="20"/>
+    <circle cx="990" cy="320" r="164" fill="#fff7ed" stroke="#fb923c" stroke-width="6" stroke-dasharray="18 12"/>
+    <g transform="translate(990 298)">
+      <rect x="-112" y="-74" width="224" height="148" rx="22" fill="#111827"/>
+      <rect x="-88" y="-50" width="176" height="100" rx="12" fill="url(#chip)"/>
+      <g stroke="#111827" stroke-width="9" stroke-linecap="round">
+        <path d="M -128 -42 h-34"/>
+        <path d="M -128 -12 h-34"/>
+        <path d="M -128 18 h-34"/>
+        <path d="M -128 48 h-34"/>
+        <path d="M 128 -42 h34"/>
+        <path d="M 128 -12 h34"/>
+        <path d="M 128 18 h34"/>
+        <path d="M 128 48 h34"/>
+      </g>
+      <path d="M -40 24 L -4 -32 L 8 -6 L 40 -52 L 20 8 L 56 2 L 0 56 L 10 22 Z" fill="#e11d48"/>
+    </g>
+    <text x="990" y="436" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="76" font-weight="950" fill="#111827">FLASH</text>
+    <text x="990" y="484" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="34" font-weight="950" letter-spacing="5" fill="#be123c">4 PI</text>
+  </g>
+</svg>

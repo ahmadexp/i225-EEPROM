@@ -22,6 +22,7 @@ NVM and SPI flash work on Raspberry Pi-class Linux hosts.
 - [Permanent MAC Address](Permanent-MAC-Address.md)
 - [Command Reference](Command-Reference.md)
 - [Hardware and Firmware](Hardware-and-Firmware.md)
+- [Visual Assets](Visual-Assets.md)
 - [Troubleshooting](Troubleshooting.md)
 - [Publishing the Wiki](Publishing-the-Wiki.md)
 

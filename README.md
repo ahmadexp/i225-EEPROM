@@ -54,6 +54,7 @@ Start with the source-controlled wiki pages:
 | [Permanent MAC Address](docs/wiki/Permanent-MAC-Address.md) | Full-flash MAC programming procedure |
 | [Command Reference](docs/wiki/Command-Reference.md) | CLI commands, options, and risk levels |
 | [Hardware and Firmware](docs/wiki/Hardware-and-Firmware.md) | Tested hardware matrix and image metadata |
+| [Visual Assets](docs/wiki/Visual-Assets.md) | Stamp logo and GitHub social preview sources |
 | [Troubleshooting](docs/wiki/Troubleshooting.md) | Common failures, symptoms, and fixes |
 | [Publishing the Wiki](docs/wiki/Publishing-the-Wiki.md) | Maintainer workflow for syncing GitHub Wiki |
 
@@ -140,7 +141,7 @@ registers.
 | `src/` | C implementation for PCI discovery, NVM access, flash access, and image helpers |
 | `docs/wiki/` | Source-controlled GitHub Wiki pages |
 | `.github/` | CI workflow, issue templates, and pull request template |
-| `assets/` | Repository artwork |
+| `assets/` | Repository artwork, stamp logo, and GitHub social preview |
 | `RE_NOTES.md` | Reverse-engineering notes and validation evidence |
 
 ## Contributing and Support

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
+  <title id="title">i225 NVM Flash 4 Pi stamp logo</title>
+  <desc id="desc">Circular stamp mark for the i225 NVM Flash 4 Pi repository.</desc>
+  <defs>
+    <linearGradient id="metal" x1="120" y1="92" x2="520" y2="548" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset=".42" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#64748b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#020617" flood-opacity=".22"/>
+    </filter>
+  </defs>
+
+  <rect width="640" height="640" rx="72" fill="#f8fafc"/>
+  <circle cx="320" cy="320" r="250" fill="#ffffff" filter="url(#shadow)"/>
+  <circle cx="320" cy="320" r="236" fill="none" stroke="#e11d48" stroke-width="24"/>
+  <circle cx="320" cy="320" r="184" fill="#fff7ed" stroke="#fb923c" stroke-width="6" stroke-dasharray="18 12"/>
+
+  <text x="320" y="132" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="31" font-weight="900" letter-spacing="1" fill="#9f1239">I225/I226 NVM</text>
+  <text x="320" y="550" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="1" fill="#9f1239">RASPBERRY PI RECOVERY</text>
+
+  <g transform="translate(320 300)">
+    <rect x="-116" y="-78" width="232" height="156" rx="22" fill="#111827"/>
+    <rect x="-92" y="-54" width="184" height="108" rx="12" fill="url(#metal)"/>
+    <g stroke="#111827" stroke-width="10" stroke-linecap="round">
+      <path d="M -132 -46 h-34"/>
+      <path d="M -132 -14 h-34"/>
+      <path d="M -132 18 h-34"/>
+      <path d="M -132 50 h-34"/>
+      <path d="M 132 -46 h34"/>
+      <path d="M 132 -14 h34"/>
+      <path d="M 132 18 h34"/>
+      <path d="M 132 50 h34"/>
+    </g>
+    <path d="M -42 26 L -4 -34 L 8 -6 L 42 -54 L 20 10 L 58 4 L 0 58 L 10 22 Z" fill="#e11d48"/>
+  </g>
+
+  <text x="320" y="443" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="84" font-weight="900" fill="#111827">FLASH</text>
+  <text x="320" y="492" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="35" font-weight="900" letter-spacing="5" fill="#be123c">4 PI</text>
+</svg>
