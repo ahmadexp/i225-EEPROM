@@ -31,7 +31,8 @@ NVM and SPI flash work on Raspberry Pi-class Linux hosts.
 - Always unbind `igc` before raw flash work.
 - Always take two matching prewrite backups.
 - Always dry-run `flashwrite` before `--write --force-flash`.
-- Always dump and compare the programmed image before rebooting.
+- Always dump and compare the programmed image against the printed
+  `patched_...mac-...bin` file before rebooting.
 - Do not use the I225 `15F2` images for an I226 blank-NVM device.
 - Do not use the 2 MB I226 image on the tested 1 MB flash board.
 

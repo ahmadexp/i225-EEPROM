@@ -38,6 +38,9 @@ struct opts {
     int do_write;        /* actually program (not dry-run) */
     int fix_checksum;    /* recompute checksum after write */
     int force_flash;     /* arm the destructive raw-flash write */
+    int use_fixed_mac;   /* flashwrite: use --mac instead of random */
+    int keep_image_mac;  /* flashwrite: preserve image bytes 0..5 */
+    uint8_t mac[6];      /* flashwrite: requested permanent MAC */
 };
 
 static void usage(void)
@@ -62,13 +65,16 @@ static void usage(void)
 "  --write       Actually program the device (default is a dry run)\n"
 "  --fix-checksum   Recompute + commit checksum after write\n"
 "  --force-flash    Arm the destructive full-flash write (required)\n"
+"  --mac MAC         flashwrite: patch image with this unicast MAC\n"
+"  --keep-image-mac flashwrite: preserve input image MAC; default is random\n"
 "  -h, --help    This help\n\n"
 "Two write paths:\n"
 "  * write      -> word-addressable Shadow-RAM / EEPROM region (lower risk)\n"
 "  * flashwrite -> raw full external SPI flash: OROM/combo/everything. This\n"
 "                  CAN BRICK the NIC. Requires --write AND --force-flash, and\n"
-"                  should be validated with repeatable flashdump reads first\n"
-"                  (see README).\n",
+"                  by default patches a random locally administered MAC into\n"
+"                  bytes 0..5 and fixes checksum word 0x3f. Validate with\n"
+"                  repeatable flashdump reads first (see README).\n",
         IGC_NVM_SHADOW_WORDS);
 }
 
@@ -103,6 +109,67 @@ static char *timestamped(char *buf, size_t n, const char *bdf)
              bdf, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
              tm.tm_hour, tm.tm_min, tm.tm_sec);
     return buf;
+}
+
+static char *timestamped_patched(char *buf, size_t n, const char *bdf,
+                                 const uint8_t mac[6])
+{
+    time_t t = time(NULL);
+    struct tm tm;
+    localtime_r(&t, &tm);
+    snprintf(buf, n,
+             "patched_%s_%04d%02d%02d_%02d%02d%02d_mac-%02x-%02x-%02x-%02x-%02x-%02x.bin",
+             bdf, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+             tm.tm_hour, tm.tm_min, tm.tm_sec,
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return buf;
+}
+
+static void mac_format(const uint8_t mac[6], char *buf, size_t n)
+{
+    snprintf(buf, n, "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static int mac_is_all_zero(const uint8_t mac[6])
+{
+    return mac[0] == 0 && mac[1] == 0 && mac[2] == 0 &&
+           mac[3] == 0 && mac[4] == 0 && mac[5] == 0;
+}
+
+static int parse_mac(const char *s, uint8_t mac[6])
+{
+    unsigned int b[6];
+    char extra;
+    int n = sscanf(s, "%x:%x:%x:%x:%x:%x%c",
+                   &b[0], &b[1], &b[2], &b[3], &b[4], &b[5], &extra);
+    if (n != 6)
+        return -EINVAL;
+
+    for (size_t i = 0; i < 6; i++) {
+        if (b[i] > 0xff)
+            return -EINVAL;
+        mac[i] = (uint8_t)b[i];
+    }
+
+    if ((mac[0] & 0x01) || mac_is_all_zero(mac))
+        return -EINVAL;
+    return 0;
+}
+
+static int random_mac(uint8_t mac[6])
+{
+    FILE *f = fopen("/dev/urandom", "rb");
+    if (!f)
+        return -errno;
+    size_t n = fread(mac, 1, 6, f);
+    int err = ferror(f) ? errno : 0;
+    fclose(f);
+    if (n != 6)
+        return err ? -err : -EIO;
+
+    mac[0] = (uint8_t)((mac[0] & 0xfc) | 0x02);
+    return 0;
 }
 
 /* Read the shadow span into a freshly allocated buffer. */
@@ -325,6 +392,68 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
     int rc = image_load(o->image, &img);
     if (rc) { fprintf(stderr, "load %s: %s\n", o->image, strerror(-rc)); return 1; }
     size_t len = img.nbytes;
+
+    printf("Full-flash image: %s (%zu bytes)\n", o->image, len);
+
+    uint8_t old_mac[6];
+    rc = image_get_mac(&img, old_mac);
+    if (rc) {
+        image_free(&img);
+        fprintf(stderr, "image is too small to contain a permanent MAC\n");
+        return 1;
+    }
+    char old_mac_s[18];
+    mac_format(old_mac, old_mac_s, sizeof(old_mac_s));
+
+    char patched_name[160];
+    const char *patched_path = NULL;
+    char new_mac_s[18] = "";
+    int mac_was_random = 0;
+
+    if (o->keep_image_mac) {
+        printf("Image MAC preserved: %s\n", old_mac_s);
+    } else {
+        uint8_t new_mac[6];
+        uint16_t checksum;
+
+        if (o->use_fixed_mac) {
+            memcpy(new_mac, o->mac, sizeof(new_mac));
+        } else {
+            rc = random_mac(new_mac);
+            if (rc) {
+                image_free(&img);
+                fprintf(stderr, "random MAC generation failed: %s\n", strerror(-rc));
+                return 1;
+            }
+            mac_was_random = 1;
+        }
+
+        mac_format(new_mac, new_mac_s, sizeof(new_mac_s));
+        rc = image_patch_mac(&img, new_mac, &checksum);
+        if (rc) {
+            image_free(&img);
+            fprintf(stderr, "image is too small to patch checksum word 0x%02x\n",
+                    NVM_CHECKSUM_REG);
+            return 1;
+        }
+
+        printf("Image MAC patched: %s -> %s (%s)\n",
+               old_mac_s, new_mac_s,
+               o->use_fixed_mac ? "requested" : "random locally administered");
+        printf("Updated image checksum word 0x%02x: 0x%04x\n",
+               NVM_CHECKSUM_REG, checksum);
+
+        timestamped_patched(patched_name, sizeof(patched_name), d->bdf, new_mac);
+        rc = image_save(patched_name, img.words, img.nwords);
+        if (rc) {
+            image_free(&img);
+            fprintf(stderr, "save %s: %s\n", patched_name, strerror(-rc));
+            return 1;
+        }
+        patched_path = patched_name;
+        printf("Patched flash image saved: %s\n", patched_path);
+    }
+
     /* image_load stores words; rebuild a byte view for the raw flash. */
     uint8_t *bytes = malloc(len);
     if (!bytes) { image_free(&img); fprintf(stderr, "oom\n"); return 1; }
@@ -332,7 +461,6 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
         bytes[2 * i]     = (uint8_t)(img.words[i] & 0xFF);
         bytes[2 * i + 1] = (uint8_t)(img.words[i] >> 8);
     }
-    printf("Full-flash image: %s (%zu bytes)\n", o->image, len);
 
     /* Always take a full backup first. */
     size_t fsz = flash_size_bytes(d);
@@ -360,6 +488,13 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
         printf("\nDRY RUN: would erase+program+verify %zu bytes of raw flash on %s.\n",
                len, d->bdf);
         printf("This is DESTRUCTIVE and can brick the NIC.\n");
+        if (patched_path)
+            printf("Compare a later post-write flashdump against %s.\n", patched_path);
+        else if (o->keep_image_mac)
+            printf("Compare a later post-write flashdump against %s.\n", o->image);
+        if (mac_was_random)
+            printf("Use --mac %s to reuse this dry-run MAC on the real write.\n",
+                   new_mac_s);
         printf("Re-run with BOTH --write and --force-flash to proceed,\n");
         printf("and confirm the FLSW CMD constants in flash.c against your datasheet.\n");
         free(bytes); image_free(&img);
@@ -380,6 +515,12 @@ static int do_flashwrite(const struct pci_dev *d, const struct opts *o)
     if (rc == -EILSEQ) { fprintf(stderr, "VERIFY FAILED -- restore from backup!\n"); return 1; }
     if (rc) { fprintf(stderr, "flash program: %s -- restore from backup!\n", strerror(-rc)); return 1; }
     printf("SUCCESS: full flash programmed and verified. Reboot to apply.\n");
+    if (patched_path)
+        printf("Compare a post-write flashdump against %s before rebooting.\n",
+               patched_path);
+    else if (o->keep_image_mac)
+        printf("Compare a post-write flashdump against %s before rebooting.\n",
+               o->image);
     return 0;
 }
 
@@ -445,8 +586,31 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--write"))            o.do_write = 1;
         else if (!strcmp(a, "--fix-checksum"))     o.fix_checksum = 1;
         else if (!strcmp(a, "--force-flash"))      o.force_flash = 1;
+        else if (!strcmp(a, "--mac") && i + 1 < argc) {
+            int prc = parse_mac(argv[++i], o.mac);
+            if (prc) {
+                fprintf(stderr,
+                        "invalid --mac: use a nonzero unicast address such as 02:a0:c9:12:34:56\n");
+                return 2;
+            }
+            o.use_fixed_mac = 1;
+        }
+        else if (!strcmp(a, "--mac")) {
+            fprintf(stderr, "--mac needs an address\n");
+            return 2;
+        }
+        else if (!strcmp(a, "--keep-image-mac"))   o.keep_image_mac = 1;
         else if (!strcmp(a, "-h") || !strcmp(a, "--help")) { usage(); return 0; }
         else { fprintf(stderr, "unknown arg: %s\n", a); return 2; }
+    }
+
+    if (o.use_fixed_mac && o.keep_image_mac) {
+        fprintf(stderr, "--mac and --keep-image-mac are mutually exclusive\n");
+        return 2;
+    }
+    if ((o.use_fixed_mac || o.keep_image_mac) && o.cmd != CMD_FLASHWRITE) {
+        fprintf(stderr, "--mac and --keep-image-mac apply only to flashwrite\n");
+        return 2;
     }
 
     struct pci_dev devs[MAX_DEV];

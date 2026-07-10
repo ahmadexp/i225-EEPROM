@@ -39,6 +39,11 @@ unsupported flash part can brick the NIC. Always take two matching backups,
 perform a dry-run, and independently dump/compare the programmed image before
 rebooting.
 
+By default, `flashwrite` patches a fresh locally administered unicast MAC into
+the image before programming. Compare post-write dumps against the printed
+`patched_...mac-...bin` file, or pass `--keep-image-mac` if you intentionally
+want the input image's MAC bytes unchanged.
+
 This project is not affiliated with Intel, Raspberry Pi, or any board vendor.
 Firmware binaries are not vendored here.
 
@@ -230,14 +235,21 @@ sudo I225NVM_OP=5 I225NVM_COUNT=1 I225NVM_DATA=0x00 ./i225nvm flsw -b "$BDF"
 sudo I225NVM_OP=4 I225NVM_COUNT=1 ./i225nvm flsw -b "$BDF"
 ```
 
-5. Dry-run the write. This takes another automatic backup but does not erase:
+5. Dry-run the write. This takes another automatic backup, chooses a random
+locally administered MAC, saves a `patched_...mac-...bin` reference image, but
+does not erase:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" \
   -i firmware/FXVL_125C_V_1MB_2.32.bin
 ```
 
-6. Perform the destructive write:
+If you want the real write to use the same MAC printed by the dry-run, add
+`--mac <printed-mac>` to the write command. Otherwise, the write will choose a
+new random MAC by default.
+
+6. Perform the destructive write. Record the `patched_...mac-...bin` path it
+prints:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" \
@@ -251,19 +263,17 @@ Expected success line:
 SUCCESS: full flash programmed and verified. Reboot to apply.
 ```
 
-7. Take an independent post-write dump and compare it to the input image:
+7. Take an independent post-write dump and compare it to the patched image that
+was printed during the write:
 
 ```sh
 sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/postwrite-1mb.bin
-sha256sum backups/postwrite-1mb.bin firmware/FXVL_125C_V_1MB_2.32.bin
-cmp backups/postwrite-1mb.bin firmware/FXVL_125C_V_1MB_2.32.bin
+sha256sum backups/postwrite-1mb.bin patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-xx-xx-xx-xx-xx-xx.bin
+cmp backups/postwrite-1mb.bin patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-xx-xx-xx-xx-xx-xx.bin
 ```
 
-Both hashes should be:
-
-```text
-881434a8e54ebaf70117dd5061c3a2f04b16fe1cc3e443777337fb6774892024
-```
+Both hashes should match. If you used `--keep-image-mac`, compare against the
+original input image instead.
 
 8. Reboot so PCIe/NVM auto-load uses the new flash contents:
 
@@ -287,8 +297,7 @@ Intel Corporation Ethernet Controller I226-V [8086:125c]
 Kernel driver in use: igc
 ```
 
-On the recovered board, the interface appeared as `eth1` with MAC
-`00:a0:c9:00:00:00`.
+On the recovered board, the interface appeared as `eth1`.
 
 ## Permanent MAC Address
 
@@ -304,81 +313,56 @@ flash image. These bytes are also exposed after boot as shadow-NVM words
 
 On the tested I226-V, writing only the shadow-NVM words with `write -n 64`
 verified before reboot but did not persist across reboot. For a permanent
-change, patch the 1 MB full-flash image, recompute checksum word `0x3f`, and
-program the full image with `flashwrite`.
+change, program the full image with `flashwrite`; it patches bytes `0..5` and
+recomputes checksum word `0x3f` before writing.
 
 Use a unique unicast MAC address. A `02:...` prefix is suitable for a locally
 administered address; do not reuse Intel's public OUI unless you have an
 assigned address.
 
-Example, setting `02:a0:c9:12:34:56`:
+By default `flashwrite` picks a fresh random locally administered unicast MAC
+and saves the exact patched image as `patched_...mac-...bin`.
+
+Example with the default random MAC:
 
 ```sh
 BDF=0001:01:00.0
-MAC=02:a0:c9:12:34:56
 SRC=firmware/FXVL_125C_V_1MB_2.32.bin
-DST=firmware/FXVL_125C_V_1MB_2.32_mac-02-a0-c9-12-34-56.bin
 
-cp "$SRC" "$DST"
-
-python3 - "$DST" "$MAC" <<'PY'
-import hashlib
-import sys
-from pathlib import Path
-
-p = Path(sys.argv[1])
-mac = bytes(int(x, 16) for x in sys.argv[2].split(":"))
-if len(mac) != 6:
-    raise SystemExit("MAC must have 6 octets")
-if mac[0] & 1:
-    raise SystemExit("MAC must be unicast; first octet must not be odd")
-
-data = bytearray(p.read_bytes())
-if len(data) != 1048576:
-    raise SystemExit("expected the 1 MB I226-V image")
-
-old = bytes(data[:6])
-data[:6] = mac
-
-# Intel NVM checksum: words 0x00..0x3f must sum to 0xbaba.
-words = [data[i] | (data[i + 1] << 8) for i in range(0, 0x80, 2)]
-checksum = (0xBABA - sum(words[:0x3f])) & 0xffff
-data[0x7e] = checksum & 0xff
-data[0x7f] = checksum >> 8
-
-p.write_bytes(data)
-print("old_mac=" + ":".join(f"{b:02x}" for b in old))
-print("new_mac=" + ":".join(f"{b:02x}" for b in mac))
-print(f"checksum_word_0x3f=0x{checksum:04x}")
-print("sha256=" + hashlib.sha256(data).hexdigest())
-PY
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC"
 ```
 
-For `02:a0:c9:12:34:56`, the patched image should report:
-
-```text
-checksum_word_0x3f=0x0095
-sha256=bf49d1bc57fa98ab81ad88e5aaf7224df1a59116fd3690f470d1c85912504ad2
-```
-
-Dry-run first, then unbind `igc` and perform the destructive full-image write:
+The dry-run prints the generated MAC and a patched image path. To reuse that
+same MAC on the real write:
 
 ```sh
-sudo ./i225nvm flashwrite -b "$BDF" -i "$DST"
+MAC=02:a0:c9:12:34:56  # replace with the MAC printed by the dry-run
+
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" \
+  --mac "$MAC" \
+  --write --force-flash
+```
+
+For a deterministic MAC from the start, pass `--mac` to both dry-run and write:
+
+```sh
+MAC=02:a0:c9:12:34:56
+
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" --mac "$MAC"
 
 if [ -e /sys/bus/pci/devices/$BDF/driver/unbind ]; then
   printf '%s\n' "$BDF" | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
 fi
 
-sudo ./i225nvm flashwrite -b "$BDF" -i "$DST" --write --force-flash
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" --mac "$MAC" --write --force-flash
 ```
 
 Take an independent dump and compare before rebooting:
 
 ```sh
 sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/post-mac-1mb.bin
-sha256sum "$DST" backups/post-mac-1mb.bin
-cmp "$DST" backups/post-mac-1mb.bin
+sha256sum patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-02-a0-c9-12-34-56.bin backups/post-mac-1mb.bin
+cmp patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-02-a0-c9-12-34-56.bin backups/post-mac-1mb.bin
 sudo reboot
 ```
 
@@ -394,12 +378,12 @@ sudo ./i225nvm checksum -b "$BDF"
 ## Restore
 
 For raw-flash recovery, restore with `flashwrite`, not the shadow-RAM `write`
-command:
+command. Use `--keep-image-mac` when restoring an exact backup:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" \
   -i backups/prewrite-1mb-a.bin \
-  --write --force-flash
+  --keep-image-mac --write --force-flash
 ```
 
 Keep every `backup_<bdf>_<timestamp>.bin` produced by `flashwrite`; those are
@@ -428,6 +412,8 @@ Raw full-flash commands, for whole firmware images:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" -i image.bin
+sudo ./i225nvm flashwrite -b "$BDF" -i image.bin --mac 02:a0:c9:12:34:56
+sudo ./i225nvm flashwrite -b "$BDF" -i image.bin --keep-image-mac
 sudo ./i225nvm flashwrite -b "$BDF" -i image.bin --write --force-flash
 ```
 

@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | `checksum --write` | Medium | Recomputes and commits the shadow-NVM checksum. |
 | `write -i FILE --write --fix-checksum` | Medium | Programs the word-addressable shadow-RAM/EEPROM region. |
-| `flashwrite -i FILE --write --force-flash` | High | Erases and programs the raw external SPI flash. Can brick the NIC. |
+| `flashwrite -i FILE --write --force-flash` | High | Erases and programs the raw external SPI flash. By default, patches a random locally administered MAC and saves a `patched_...mac-...bin` reference image. Can brick the NIC. |
 
 ## Global Options
 
@@ -32,6 +32,8 @@
 | `--write` | Actually program the device. Without it, write commands dry-run. |
 | `--fix-checksum` | Recompute checksum after shadow writes. |
 | `--force-flash` | Required with `--write` for destructive full-flash writes. |
+| `--mac MAC` | `flashwrite` only: patch the image with this nonzero unicast permanent MAC instead of a random one. |
+| `--keep-image-mac` | `flashwrite` only: preserve the input image MAC bytes instead of patching a random MAC. |
 
 ## Diagnostic FLSW Access
 
@@ -44,4 +46,3 @@ sudo I225NVM_OP=4 I225NVM_COUNT=1 ./i225nvm flsw -b "$BDF"
 
 For the tested board, this read the SPI status register and returned `0x1c`
 before block-protect bits were cleared.
-

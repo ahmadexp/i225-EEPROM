@@ -66,13 +66,17 @@ Stop if the backups do not match.
 
 ## Program
 
-Dry-run:
+Dry-run. This chooses a random locally administered MAC by default and saves a
+`patched_...mac-...bin` reference image:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" -i firmware/FXVL_125C_V_1MB_2.32.bin
 ```
 
-Write:
+Use `--mac <printed-mac>` on the real write if you want to reuse the exact MAC
+from the dry-run. Otherwise the write chooses a fresh random MAC.
+
+Write. Record the `patched_...mac-...bin` path printed by this command:
 
 ```sh
 sudo ./i225nvm flashwrite -b "$BDF" \
@@ -90,9 +94,12 @@ SUCCESS: full flash programmed and verified. Reboot to apply.
 
 ```sh
 sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/postwrite-1mb.bin
-sha256sum firmware/FXVL_125C_V_1MB_2.32.bin backups/postwrite-1mb.bin
-cmp firmware/FXVL_125C_V_1MB_2.32.bin backups/postwrite-1mb.bin
+sha256sum patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-xx-xx-xx-xx-xx-xx.bin backups/postwrite-1mb.bin
+cmp patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-xx-xx-xx-xx-xx-xx.bin backups/postwrite-1mb.bin
 ```
+
+If you used `--keep-image-mac`, compare against the original input image
+instead.
 
 ## Reboot and Confirm
 

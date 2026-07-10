@@ -5,83 +5,71 @@ SPI flash image. These bytes also appear after boot as shadow-NVM words
 `0x00..0x02`.
 
 Writing only shadow-NVM words `0x00..0x3f` changed immediate readback but did
-not persist after reboot on the tested board. Patch and reprogram the full 1 MB
-image instead.
+not persist after reboot on the tested board. Use `flashwrite` so the full
+image is patched and programmed.
 
-## Patch the Image
+## Default Random MAC
 
-Example target MAC:
+By default, `flashwrite` picks a fresh locally administered unicast MAC,
+patches image bytes `0..5`, recomputes checksum word `0x3f`, and saves the
+exact image it will program as `patched_...mac-...bin`.
 
 ```sh
 BDF=0001:01:00.0
-MAC=02:a0:c9:12:34:56
 SRC=firmware/FXVL_125C_V_1MB_2.32.bin
-DST=firmware/FXVL_125C_V_1MB_2.32_mac-02-a0-c9-12-34-56.bin
 
-cp "$SRC" "$DST"
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC"
 ```
 
-Patch bytes `0..5` and checksum word `0x3f`:
+The dry-run prints the generated MAC. To use that same address on the real
+write, pass it back with `--mac`:
 
 ```sh
-python3 - "$DST" "$MAC" <<'PY'
-import hashlib
-import sys
-from pathlib import Path
+MAC=02:a0:c9:12:34:56  # replace with the MAC printed by the dry-run
 
-p = Path(sys.argv[1])
-mac = bytes(int(x, 16) for x in sys.argv[2].split(":"))
-if len(mac) != 6:
-    raise SystemExit("MAC must have 6 octets")
-if mac[0] & 1:
-    raise SystemExit("MAC must be unicast; first octet must not be odd")
-
-data = bytearray(p.read_bytes())
-if len(data) != 1048576:
-    raise SystemExit("expected the 1 MB I226-V image")
-
-old = bytes(data[:6])
-data[:6] = mac
-
-words = [data[i] | (data[i + 1] << 8) for i in range(0, 0x80, 2)]
-checksum = (0xBABA - sum(words[:0x3f])) & 0xffff
-data[0x7e] = checksum & 0xff
-data[0x7f] = checksum >> 8
-
-p.write_bytes(data)
-print("old_mac=" + ":".join(f"{b:02x}" for b in old))
-print("new_mac=" + ":".join(f"{b:02x}" for b in mac))
-print(f"checksum_word_0x3f=0x{checksum:04x}")
-print("sha256=" + hashlib.sha256(data).hexdigest())
-PY
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" \
+  --mac "$MAC" \
+  --write --force-flash
 ```
 
-For `02:a0:c9:12:34:56`, expected values:
+If you omit `--mac`, the write command intentionally chooses a new random MAC.
 
-```text
-checksum_word_0x3f=0x0095
-sha256=bf49d1bc57fa98ab81ad88e5aaf7224df1a59116fd3690f470d1c85912504ad2
-```
+## Deterministic MAC
 
-## Program the Patched Image
+Use a unique nonzero unicast MAC address. A `02:...` prefix is suitable for a
+locally administered address; do not reuse Intel's public OUI unless you have
+an assigned address.
 
 ```sh
-sudo ./i225nvm flashwrite -b "$BDF" -i "$DST"
+BDF=0001:01:00.0
+SRC=firmware/FXVL_125C_V_1MB_2.32.bin
+MAC=02:a0:c9:12:34:56
+
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" --mac "$MAC"
 
 if [ -e /sys/bus/pci/devices/$BDF/driver/unbind ]; then
   printf '%s\n' "$BDF" | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
 fi
 
-sudo ./i225nvm flashwrite -b "$BDF" -i "$DST" --write --force-flash
+sudo ./i225nvm flashwrite -b "$BDF" -i "$SRC" --mac "$MAC" --write --force-flash
 ```
+
+Use `--keep-image-mac` only when you intentionally want to preserve the input
+image's existing MAC bytes.
 
 ## Verify Before Reboot
 
+Compare the post-write dump to the `patched_...mac-...bin` file printed by the
+write command:
+
 ```sh
 sudo ./i225nvm flashdump -b "$BDF" -s 1048576 -o backups/post-mac-1mb.bin
-sha256sum "$DST" backups/post-mac-1mb.bin
-cmp "$DST" backups/post-mac-1mb.bin
+sha256sum patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-02-a0-c9-12-34-56.bin backups/post-mac-1mb.bin
+cmp patched_0001:01:00.0_YYYYMMDD_HHMMSS_mac-02-a0-c9-12-34-56.bin backups/post-mac-1mb.bin
 ```
+
+If you used `--keep-image-mac`, compare against the original input image
+instead.
 
 ## Reboot and Confirm
 
@@ -98,8 +86,17 @@ sudo ./i225nvm dump -b "$BDF" -n 64 -o shadow-after-mac.bin
 sudo ./i225nvm checksum -b "$BDF"
 ```
 
-Expected Linux result:
+Expected Linux result for the deterministic example:
 
 ```text
 eth1 DOWN 02:a0:c9:12:34:56
 ```
+
+## Image Layout
+
+| NVM word | File bytes | Meaning |
+| --- | --- | --- |
+| `0x00` | `0..1` | MAC bytes 0 and 1 |
+| `0x01` | `2..3` | MAC bytes 2 and 3 |
+| `0x02` | `4..5` | MAC bytes 4 and 5 |
+| `0x3f` | `0x7e..0x7f` | Checksum word; words `0x00..0x3f` must sum to `0xbaba` |

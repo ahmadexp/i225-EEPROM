@@ -21,6 +21,8 @@ Use this checklist before any raw SPI flash write.
 - Record the SHA-256 of the input image.
 - Confirm the input image byte size matches the fitted flash.
 - Run `flashwrite` once without `--write --force-flash` as a dry run.
+- Record the generated MAC and `patched_...mac-...bin` path, or decide on an
+  explicit `--mac` value before the real write.
 
 ## During Programming
 
@@ -31,7 +33,8 @@ Use this checklist before any raw SPI flash write.
 ## After Programming
 
 - Dump the programmed flash with the same explicit byte size.
-- Compare the dump to the input image with `cmp`.
+- Compare the dump to the printed `patched_...mac-...bin` file with `cmp`.
+  Compare to the input image only if you used `--keep-image-mac`.
 - Only reboot after the programmed image compares identical.
 - After reboot, confirm the PCI ID, kernel driver, and MAC address.
 
@@ -41,4 +44,3 @@ Use this checklist before any raw SPI flash write.
 - Keep the device powered.
 - Take a diagnostic dump.
 - Restore a known-good full image before power-cycling.
-

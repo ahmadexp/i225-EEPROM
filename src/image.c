@@ -88,3 +88,35 @@ int image_checksum_ok(const struct nvm_image *img)
         sum += img->words[i];
     return sum == NVM_SUM;
 }
+
+int image_get_mac(const struct nvm_image *img, uint8_t mac[6])
+{
+    if (img->nwords < 3)
+        return -EINVAL;
+
+    for (size_t i = 0; i < 3; i++) {
+        mac[2 * i] = (uint8_t)(img->words[i] & 0xff);
+        mac[2 * i + 1] = (uint8_t)(img->words[i] >> 8);
+    }
+    return 0;
+}
+
+int image_patch_mac(struct nvm_image *img, const uint8_t mac[6],
+                    uint16_t *checksum_out)
+{
+    if (img->nwords <= NVM_CHECKSUM_REG)
+        return -EINVAL;
+
+    for (size_t i = 0; i < 3; i++)
+        img->words[i] = (uint16_t)(mac[2 * i] | (mac[2 * i + 1] << 8));
+
+    uint16_t sum = 0;
+    for (uint16_t i = 0; i < NVM_CHECKSUM_REG; i++)
+        sum += img->words[i];
+
+    uint16_t checksum = (uint16_t)(NVM_SUM - sum);
+    img->words[NVM_CHECKSUM_REG] = checksum;
+    if (checksum_out)
+        *checksum_out = checksum;
+    return 0;
+}

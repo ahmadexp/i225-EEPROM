@@ -33,7 +33,8 @@ sudo I225NVM_OP=4 I225NVM_COUNT=1 ./i225nvm flsw -b "$BDF"
 ## Full-Flash Verify Fails
 
 Do not reboot after a failed full-flash verify. Keep the device powered, take a
-diagnostic dump, and restore a known-good full image.
+diagnostic dump, and restore a known-good full image. Use `--keep-image-mac`
+when restoring an exact backup image.
 
 Useful checks:
 
@@ -46,6 +47,16 @@ od -Ax -tx1 -N 128 backups/failed-readback.bin
 The tested I226-V/SST flash requires one-byte FLSW write transactions. If a
 readback shows only the first byte of each 32-bit word programmed and the rest
 left as `0xff`, rebuild from a version containing the byte-write fix.
+
+## Post-Write Dump Differs From the Input Image
+
+By default, `flashwrite` patches a random locally administered MAC into bytes
+`0..5` and recomputes checksum word `0x3f`. Compare the post-write dump against
+the `patched_...mac-...bin` path printed during the write, not the original
+firmware image.
+
+If you intentionally need the original image MAC unchanged, rerun with
+`--keep-image-mac`.
 
 ## Shadow MAC Write Does Not Persist
 
